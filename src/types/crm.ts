@@ -48,6 +48,8 @@ export interface TeamMember {
   assignedLeadsCount: number;
   activeChatsCount: number;
   lastLoginAt: string;
+  conversionRate?: number;
+  avgResponseTime?: string;
 }
 
 export interface NoteItem {
@@ -63,7 +65,10 @@ export interface Contact {
   phone: string;
   email: string;
   company: string;
+  roleTitle?: string;
   location: string;
+  preferredLanguage?: 'English' | 'Manglish' | 'Malayalam';
+  bestTimeToContact?: string;
   source: string;
   tags: string[];
   notes: NoteItem[];
@@ -73,6 +78,14 @@ export interface Contact {
   totalMessages: number;
 }
 
+export interface LeadScoreBreakdown {
+  budgetReadiness: number; // out of 25
+  needSpecificity: number; // out of 25
+  timelineUrgency: number; // out of 20
+  decisionAuthority: number; // out of 15
+  engagementDepth: number; // out of 15
+}
+
 export interface Lead {
   id: string;
   contactId: string;
@@ -80,10 +93,16 @@ export interface Lead {
   leadStatus: LeadStatus;
   leadType: LeadType;
   leadScore: number; // 0 - 100
+  scoreBreakdown: LeadScoreBreakdown;
   interestedService: string;
   budget: string;
+  estimatedValueInr: number;
   timeline: string;
   requirements: string[];
+  buyingSignals: string[];
+  detectedObjections: string[];
+  recommendedNextAction: string;
+  customerSentiment: 'Positive & High Intent' | 'Urgent / Escalated' | 'Curious & Evaluating' | 'Price Sensitive';
   source: string;
   assignedAgentId: string;
   aiSummary: string;
@@ -143,6 +162,8 @@ export interface Conversation {
   lastMessage: string;
   lastMessageTime: string;
   language: 'English' | 'Malayalam' | 'Manglish';
+  suggestedReplies?: string[];
+  keyFinding?: string;
 }
 
 export interface FollowUp {
@@ -164,6 +185,31 @@ export interface KnowledgeArticle {
   keywords: string[];
   isActive: boolean;
   updatedAt: string;
+  usageCount?: number;
+}
+
+export interface KnowledgeGapFinding {
+  id: string;
+  questionAsked: string;
+  language: 'English' | 'Manglish' | 'Malayalam';
+  occurrences: number;
+  avgConfidence: number;
+  suggestedCategory: KnowledgeCategory;
+  suggestedTitle: string;
+  suggestedContent: string;
+  resolved: boolean;
+}
+
+export interface StrategicFinding {
+  id: string;
+  category: 'REVENUE_SIGNAL' | 'LANGUAGE_INSIGHT' | 'KNOWLEDGE_GAP' | 'CONVERSION_BOTTLENECK';
+  title: string;
+  metricBadge: string;
+  findingSummary: string;
+  recommendation: string;
+  actionLabel: string;
+  actionLink: string;
+  impactLevel: 'HIGH' | 'MEDIUM';
 }
 
 export interface AISettingsConfig {

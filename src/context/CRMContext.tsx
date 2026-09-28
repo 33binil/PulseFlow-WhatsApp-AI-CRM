@@ -4,13 +4,13 @@ import {
   UserRole,
   Contact,
   Lead,
-  LeadStatus,
-  LeadType,
   Conversation,
   Message,
   FollowUp,
   FollowUpStatus,
   KnowledgeArticle,
+  KnowledgeGapFinding,
+  StrategicFinding,
   AISettingsConfig,
   WhatsAppSettingsConfig,
   CompanySettingsConfig,
@@ -25,6 +25,8 @@ import {
   INITIAL_MESSAGES,
   INITIAL_FOLLOW_UPS,
   INITIAL_KNOWLEDGE_BASE,
+  INITIAL_KNOWLEDGE_GAPS,
+  INITIAL_STRATEGIC_FINDINGS,
   INITIAL_AI_SETTINGS,
   INITIAL_WHATSAPP_SETTINGS,
   INITIAL_COMPANY_SETTINGS,
@@ -57,7 +59,7 @@ interface CRMContextValue {
   addContactNote: (contactId: string, content: string) => void;
 
   leads: Lead[];
-  addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'lastInteractionAt' | 'notes'>) => void;
+  addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'lastInteractionAt' | 'notes' | 'scoreBreakdown' | 'estimatedValueInr' | 'buyingSignals' | 'detectedObjections' | 'recommendedNextAction' | 'customerSentiment'> & Partial<Pick<Lead, 'scoreBreakdown' | 'estimatedValueInr' | 'buyingSignals' | 'detectedObjections' | 'recommendedNextAction' | 'customerSentiment'>>) => void;
   updateLead: (id: string, patch: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
   addLeadNote: (leadId: string, content: string) => void;
@@ -79,6 +81,10 @@ interface CRMContextValue {
   addKnowledgeArticle: (article: Omit<KnowledgeArticle, 'id' | 'updatedAt'>) => void;
   updateKnowledgeArticle: (id: string, patch: Partial<KnowledgeArticle>) => void;
   deleteKnowledgeArticle: (id: string) => void;
+
+  knowledgeGaps: KnowledgeGapFinding[];
+  resolveKnowledgeGapToArticle: (gapId: string) => void;
+  strategicFindings: StrategicFinding[];
 
   aiSettings: AISettingsConfig;
   updateAISettings: (patch: Partial<AISettingsConfig>) => void;
@@ -111,6 +117,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>(INITIAL_MESSAGES);
   const [followUps, setFollowUps] = useState<FollowUp[]>(INITIAL_FOLLOW_UPS);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeArticle[]>(INITIAL_KNOWLEDGE_BASE);
+  const [knowledgeGaps, setKnowledgeGaps] = useState<KnowledgeGapFinding[]>(INITIAL_KNOWLEDGE_GAPS);
+  const [strategicFindings] = useState<StrategicFinding[]>(INITIAL_STRATEGIC_FINDINGS);
   const [aiSettings, setAISettings] = useState<AISettingsConfig>(INITIAL_AI_SETTINGS);
   const [whatsappSettings, setWhatsAppSettings] = useState<WhatsAppSettingsConfig>(INITIAL_WHATSAPP_SETTINGS);
   const [companySettings, setCompanySettings] = useState<CompanySettingsConfig>(INITIAL_COMPANY_SETTINGS);
@@ -225,11 +233,49 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Leads CRUD
   const addLead = (
-    lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'lastInteractionAt' | 'notes'>
+    lead: Omit<
+      Lead,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'lastInteractionAt'
+      | 'notes'
+      | 'scoreBreakdown'
+      | 'estimatedValueInr'
+      | 'buyingSignals'
+      | 'detectedObjections'
+      | 'recommendedNextAction'
+      | 'customerSentiment'
+    > &
+      Partial<
+        Pick<
+          Lead,
+          | 'scoreBreakdown'
+          | 'estimatedValueInr'
+          | 'buyingSignals'
+          | 'detectedObjections'
+          | 'recommendedNextAction'
+          | 'customerSentiment'
+        >
+      >
   ) => {
+    const numericVal = parseInt(String(lead.budget).replace(/[^0-9]/g, ''), 10) || 75000;
     const newLead: Lead = {
       ...lead,
       id: `ld-${Date.now()}`,
+      scoreBreakdown: lead.scoreBreakdown || {
+        budgetReadiness: Math.min(25, Math.round(lead.leadScore * 0.25)),
+        needSpecificity: Math.min(25, Math.round(lead.leadScore * 0.25)),
+        timelineUrgency: Math.min(20, Math.round(lead.leadScore * 0.2)),
+        decisionAuthority: Math.min(15, Math.round(lead.leadScore * 0.15)),
+        engagementDepth: Math.min(15, Math.round(lead.leadScore * 0.15))
+      },
+      estimatedValueInr: lead.estimatedValueInr ?? numericVal,
+      buyingSignals: lead.buyingSignals || ['Inbound inquiry logged with active service requirement'],
+      detectedObjections: lead.detectedObjections || [],
+      recommendedNextAction:
+        lead.recommendedNextAction || 'Share service deck and schedule 15-minute discovery call.',
+      customerSentiment: lead.customerSentiment || 'Positive & High Intent',
       createdAt: new Date().toISOString().slice(0, 10),
       updatedAt: new Date().toISOString().slice(0, 10),
       lastInteractionAt: 'Just now',
@@ -404,7 +450,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lower.includes('complaint') ||
       lower.includes('refund');
 
-    // If AI is disabled on conversation or globally, just update inbox & unread count
     if (!conv.aiEnabled || !aiSettings.aiEnabled || !aiSettings.autoReplyEnabled) {
       setConversations((prev) =>
         prev.map((c) =>
@@ -422,7 +467,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    // Build contextual AI structured response grounded in Knowledge Base & language
     const isManglish =
       languageHint === 'Manglish' ||
       lower.includes('aanu') ||
@@ -457,7 +501,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         intent: 'pricing_enquiry',
         service: 'web_development',
         leadType: 'HOT',
-        leadScore: 88,
+        leadScore: 91,
         budget: lower.includes('100000') || lower.includes('1 lakh') ? '₹1,00,000' : lead?.budget || '₹75,000 - ₹1,00,000',
         timeline: lower.includes('next month') ? 'Next month' : lead?.timeline || 'Within 1 month',
         requirements: Array.from(new Set([...(lead?.requirements || []), 'Custom Website / E-Commerce'])),
@@ -525,6 +569,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               aiEnabled: !aiStructured.needsHuman,
               needsHumanAttention: aiStructured.needsHuman,
               status: aiStructured.needsHuman ? 'HUMAN_HANDOFF' : 'OPEN',
+              keyFinding: aiStructured.summary,
               handoffReason: aiStructured.needsHuman
                 ? 'Customer requested human/manager intervention'
                 : undefined
@@ -544,6 +589,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 budget: aiStructured.budget,
                 timeline: aiStructured.timeline,
                 requirements: aiStructured.requirements,
+                buyingSignals: Array.from(
+                  new Set([
+                    ...l.buyingSignals,
+                    `Latest AI Intent: ${aiStructured.intent} (${Math.round(aiStructured.confidence * 100)}% confidence)`
+                  ])
+                ),
                 aiSummary: aiStructured.summary,
                 lastInteractionAt: 'Just now'
               }
@@ -566,7 +617,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pushToast('Human Handoff Triggered!', `${contact?.name} escalated to Human Agent.`, 'danger');
     } else {
       pushToast(
-        'AI Auto-Replied & Scored Lead',
+        'AI Auto-Replied & Updated Findings',
         `Intent: ${aiStructured.intent} · Score: ${aiStructured.leadScore}/100 (${aiStructured.leadType})`,
         'success'
       );
@@ -595,7 +646,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const created: KnowledgeArticle = {
       ...article,
       id: `kb-${Date.now()}`,
-      updatedAt: new Date().toISOString().slice(0, 10)
+      updatedAt: new Date().toISOString().slice(0, 10),
+      usageCount: 1
     };
     setKnowledgeBase((prev) => [created, ...prev]);
     pushToast('Knowledge Entry Added', `"${created.title}" is now live for AI context.`, 'success');
@@ -613,6 +665,28 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteKnowledgeArticle = (id: string) => {
     setKnowledgeBase((prev) => prev.filter((k) => k.id !== id));
     pushToast('Knowledge Entry Deleted', 'Removed from AI context.', 'warning');
+  };
+
+  const resolveKnowledgeGapToArticle = (gapId: string) => {
+    const gap = knowledgeGaps.find((g) => g.id === gapId);
+    if (!gap || gap.resolved) return;
+    const created: KnowledgeArticle = {
+      id: `kb-${Date.now()}`,
+      category: gap.suggestedCategory,
+      title: gap.suggestedTitle,
+      content: gap.suggestedContent,
+      keywords: gap.suggestedTitle.toLowerCase().split(/\s+/).slice(0, 5),
+      isActive: true,
+      updatedAt: new Date().toISOString().slice(0, 10),
+      usageCount: gap.occurrences
+    };
+    setKnowledgeBase((prev) => [created, ...prev]);
+    setKnowledgeGaps((prev) => prev.map((g) => (g.id === gapId ? { ...g, resolved: true } : g)));
+    pushToast(
+      'AI Knowledge Gap Resolved!',
+      `"${gap.suggestedTitle}" published to Knowledge Base. AI will now answer this automatically.`,
+      'success'
+    );
   };
 
   // Settings
@@ -678,6 +752,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addKnowledgeArticle,
         updateKnowledgeArticle,
         deleteKnowledgeArticle,
+        knowledgeGaps,
+        resolveKnowledgeGapToArticle,
+        strategicFindings,
         aiSettings,
         updateAISettings,
         whatsappSettings,

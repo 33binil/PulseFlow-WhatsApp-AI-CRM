@@ -8,7 +8,13 @@ import {
   MessageSquare,
   CalendarPlus,
   Trash2,
-  X
+  X,
+  TrendingUp,
+  ShieldAlert,
+  Zap,
+  LayoutGrid,
+  List,
+  Sparkles
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import { LeadStatus, LeadType } from '../types/crm';
@@ -26,13 +32,14 @@ export const LeadsListPage: React.FC = () => {
   } = useCRM();
   const navigate = useNavigate();
 
+  const [viewMode, setViewMode] = useState<'TABLE' | 'BOARD'>('TABLE');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [agentFilter, setAgentFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'score' | 'created'>('score');
   const [page, setPage] = useState(1);
-  const pageSize = 5;
+  const pageSize = 6;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState('');
@@ -53,7 +60,6 @@ export const LeadsListPage: React.FC = () => {
         return { lead, contact, agent };
       })
       .filter(({ lead, contact }) => {
-        // Agent role sees assigned leads by default unless viewing all
         if (typeFilter !== 'ALL' && lead.leadType !== typeFilter) return false;
         if (statusFilter !== 'ALL' && lead.leadStatus !== statusFilter) return false;
         if (agentFilter !== 'ALL' && lead.assignedAgentId !== agentFilter) return false;
@@ -64,7 +70,8 @@ export const LeadsListPage: React.FC = () => {
             contact?.name.toLowerCase().includes(q) ||
             contact?.phone.toLowerCase().includes(q) ||
             lead.interestedService.toLowerCase().includes(q) ||
-            lead.aiSummary.toLowerCase().includes(q)
+            lead.aiSummary.toLowerCase().includes(q) ||
+            lead.buyingSignals.some((s) => s.toLowerCase().includes(q))
           );
         }
         return true;
@@ -74,6 +81,16 @@ export const LeadsListPage: React.FC = () => {
         return b.lead.createdAt.localeCompare(a.lead.createdAt);
       });
   }, [leads, contacts, teamMembers, typeFilter, statusFilter, agentFilter, search, sortBy]);
+
+  const totalPipelineValue = useMemo(
+    () => enrichedLeads.reduce((sum, { lead }) => sum + (lead.estimatedValueInr || 0), 0),
+    [enrichedLeads]
+  );
+
+  const totalBuyingSignals = useMemo(
+    () => enrichedLeads.reduce((sum, { lead }) => sum + (lead.buyingSignals?.length || 0), 0),
+    [enrichedLeads]
+  );
 
   const totalPages = Math.max(1, Math.ceil(enrichedLeads.length / pageSize));
   const paginatedLeads = enrichedLeads.slice((page - 1) * pageSize, page * pageSize);
@@ -109,28 +126,114 @@ export const LeadsListPage: React.FC = () => {
     setNewPhone('+91 ');
   };
 
+  const formatLakhs = (val: number) => `₹${(val / 100000).toFixed(2)}L`;
+
+  const boardStages: LeadStatus[] = [
+    'NEW',
+    'CONTACTED',
+    'QUALIFIED',
+    'PROPOSAL',
+    'NEGOTIATION',
+    'WON'
+  ];
+
   return (
-    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs text-slate-500">
-            AI Lead Qualification, Scoring & Sales Pipeline
+          <div className="text-xs font-mono uppercase tracking-wider text-emerald-700 font-semibold">
+            AI LEAD QUALIFICATION, SCORING & PIPELINE INTELLIGENCE
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mt-0.5">
-            Lead Management ({enrichedLeads.length})
+          <h1 className="text-2xl font-bold text-slate-900 mt-0.5">
+            Lead Pipeline & Findings ({enrichedLeads.length})
           </h1>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1.5 self-start"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Create New Lead</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* View Mode Toggle: Table vs Kanban Board */}
+          <div className="flex items-center bg-white border border-slate-200 p-0.5 rounded-lg">
+            <button
+              onClick={() => setViewMode('TABLE')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === 'TABLE'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Table View</span>
+            </button>
+            <button
+              onClick={() => setViewMode('BOARD')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === 'BOARD'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Pipeline Board</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create New Lead</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Lead Intelligence Summary Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+          <div className="text-xs text-slate-500">Filtered Pipeline Value</div>
+          <div className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-1">
+            {formatLakhs(totalPipelineValue)}
+          </div>
+          <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+            Across {enrichedLeads.length} qualified records
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+          <div className="text-xs text-slate-500">Average AI Lead Score</div>
+          <div className="text-xl font-bold font-mono tabular-nums text-emerald-700 mt-1">
+            {enrichedLeads.length > 0
+              ? Math.round(
+                  enrichedLeads.reduce((s, i) => s + i.lead.leadScore, 0) / enrichedLeads.length
+                )
+              : 0}{' '}
+            / 100
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">5-Factor weighted rubric</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+          <div className="text-xs text-slate-500">Extracted Buying Signals</div>
+          <div className="text-xl font-bold font-mono tabular-nums text-indigo-700 mt-1">
+            {totalBuyingSignals} Signals
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">Budget, scope & urgency verified</div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col justify-between">
+          <div className="text-xs text-slate-500">AI Deal Playbooks</div>
+          <Link
+            to="/insights"
+            className="text-xs font-bold text-slate-900 hover:text-emerald-700 flex items-center gap-1 mt-1"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Open AI Knows & Findings Hub →</span>
+          </Link>
+          <div className="text-[11px] text-slate-500">Counter-objection scripts ready</div>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Lead Type Filter Tabs */}
           <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
@@ -142,9 +245,9 @@ export const LeadsListPage: React.FC = () => {
                     setTypeFilter(type);
                     setPage(1);
                   }}
-                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                     typeFilter === type
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -191,13 +294,13 @@ export const LeadsListPage: React.FC = () => {
 
             <button
               onClick={() => setSortBy(sortBy === 'score' ? 'created' : 'score')}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowUpDown className="w-3.5 h-3.5" />
               <span>Sort: {sortBy === 'score' ? 'Lead Score' : 'Created Date'}</span>
             </button>
 
-            <div className="relative w-full sm:w-60">
+            <div className="relative w-full sm:w-64">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -206,163 +309,242 @@ export const LeadsListPage: React.FC = () => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search leads, service, summary..."
+                placeholder="Search leads, signals, service..."
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
         </div>
 
-        {/* Leads Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-500">
-                <th className="py-2.5 px-3 font-semibold">Contact</th>
-                <th className="py-2.5 px-3 font-semibold">Type & Score</th>
-                <th className="py-2.5 px-3 font-semibold">Pipeline Status</th>
-                <th className="py-2.5 px-3 font-semibold">Interested Service</th>
-                <th className="py-2.5 px-3 font-semibold">Budget & Timeline</th>
-                <th className="py-2.5 px-3 font-semibold">Assigned Agent</th>
-                <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {paginatedLeads.map(({ lead, contact }) => (
-                <tr key={lead.id} className="hover:bg-slate-50">
-                  <td className="py-3 px-3">
-                    <Link
-                      to={`/leads/${lead.id}`}
-                      className="font-bold text-slate-900 hover:underline"
-                    >
-                      {contact?.name}
-                    </Link>
-                    <div className="text-[11px] font-mono text-slate-500 tabular-nums">
-                      {contact?.phone} · {contact?.company}
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 font-mono tabular-nums">
-                    <span
-                      className={`font-bold ${
-                        lead.leadScore >= 81
-                          ? 'text-rose-700'
-                          : lead.leadScore >= 61
-                          ? 'text-emerald-700'
-                          : 'text-amber-700'
-                      }`}
-                    >
-                      {lead.leadScore}/100
-                    </span>
-                    <span aria-hidden="true" className="mx-1.5 text-slate-300">·</span>
-                    <span className="font-sans font-semibold text-slate-700">
-                      {lead.leadType}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <select
-                      value={lead.leadStatus}
-                      onChange={(e) =>
-                        updateLead(lead.id, { leadStatus: e.target.value as LeadStatus })
-                      }
-                      className="px-2 py-1 text-xs border border-slate-200 rounded bg-white font-medium"
-                    >
-                      <option value="NEW">NEW</option>
-                      <option value="CONTACTED">CONTACTED</option>
-                      <option value="QUALIFIED">QUALIFIED</option>
-                      <option value="PROPOSAL">PROPOSAL</option>
-                      <option value="NEGOTIATION">NEGOTIATION</option>
-                      <option value="WON">WON</option>
-                      <option value="LOST">LOST</option>
-                    </select>
-                  </td>
-                  <td className="py-3 px-3 text-slate-800 max-w-xs">
-                    <div className="font-medium">{lead.interestedService}</div>
-                    <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                      {lead.aiSummary}
-                    </div>
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="font-mono font-semibold text-slate-900 tabular-nums">
-                      {lead.budget}
-                    </div>
-                    <div className="text-[11px] text-slate-500">{lead.timeline}</div>
-                  </td>
-                  <td className="py-3 px-3">
-                    <select
-                      value={lead.assignedAgentId}
-                      onChange={(e) =>
-                        updateLead(lead.id, { assignedAgentId: e.target.value })
-                      }
-                      className="px-2 py-1 text-xs border border-slate-200 rounded bg-white"
-                    >
-                      {teamMembers.map((tm) => (
-                        <option key={tm.id} value={tm.id}>
-                          {tm.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-3 px-3 text-right whitespace-nowrap space-x-2">
-                    <Link
-                      to={`/leads/${lead.id}`}
-                      className="px-2.5 py-1 text-xs font-semibold bg-slate-900 text-white rounded hover:bg-slate-800"
-                    >
-                      Details
-                    </Link>
-                    <button
-                      onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
-                      className="px-2.5 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-100 text-slate-700"
-                    >
-                      Chat
-                    </button>
-                    {currentUser.role !== 'AGENT' && (
-                      <button
-                        onClick={() => deleteLead(lead.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600"
-                        title="Delete Lead"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 inline" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* TABLE VIEW */}
+        {viewMode === 'TABLE' ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500">
+                    <th className="py-2.5 px-3 font-semibold">Customer & Company</th>
+                    <th className="py-2.5 px-3 font-semibold">AI Score & Sentiment</th>
+                    <th className="py-2.5 px-3 font-semibold">Pipeline Stage</th>
+                    <th className="py-2.5 px-3 font-semibold">Service & Key Buying Signal</th>
+                    <th className="py-2.5 px-3 font-semibold">Budget & Timeline</th>
+                    <th className="py-2.5 px-3 font-semibold">Assigned Agent</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedLeads.map(({ lead, contact }) => (
+                    <tr key={lead.id} className="hover:bg-slate-50/80">
+                      <td className="py-3.5 px-3">
+                        <Link
+                          to={`/leads/${lead.id}`}
+                          className="font-bold text-slate-900 hover:text-emerald-700"
+                        >
+                          {contact?.name}
+                        </Link>
+                        <div className="text-[11px] font-mono text-slate-500 tabular-nums">
+                          {contact?.phone} · {contact?.company}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <div className="font-mono tabular-nums">
+                          <span
+                            className={`font-bold ${
+                              lead.leadScore >= 81
+                                ? 'text-emerald-700'
+                                : lead.leadScore >= 61
+                                ? 'text-indigo-700'
+                                : 'text-amber-700'
+                            }`}
+                          >
+                            {lead.leadScore}/100
+                          </span>
+                          <span aria-hidden="true" className="mx-1.5 text-slate-300">
+                            ·
+                          </span>
+                          <span className="font-sans font-bold text-slate-800">
+                            {lead.leadType}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {lead.customerSentiment}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <select
+                          value={lead.leadStatus}
+                          onChange={(e) =>
+                            updateLead(lead.id, { leadStatus: e.target.value as LeadStatus })
+                          }
+                          className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-white font-semibold"
+                        >
+                          <option value="NEW">NEW</option>
+                          <option value="CONTACTED">CONTACTED</option>
+                          <option value="QUALIFIED">QUALIFIED</option>
+                          <option value="PROPOSAL">PROPOSAL</option>
+                          <option value="NEGOTIATION">NEGOTIATION</option>
+                          <option value="WON">WON</option>
+                          <option value="LOST">LOST</option>
+                        </select>
+                      </td>
+                      <td className="py-3.5 px-3 text-slate-800 max-w-sm">
+                        <div className="font-semibold text-slate-900">{lead.interestedService}</div>
+                        {lead.buyingSignals[0] && (
+                          <div className="text-[11px] text-emerald-800 flex items-center gap-1 mt-0.5 truncate">
+                            <TrendingUp className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="truncate">{lead.buyingSignals[0]}</span>
+                          </div>
+                        )}
+                        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                          Next: {lead.recommendedNextAction}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <div className="font-mono font-bold text-slate-900 tabular-nums">
+                          {lead.budget}
+                        </div>
+                        <div className="text-[11px] text-slate-500">{lead.timeline}</div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <select
+                          value={lead.assignedAgentId}
+                          onChange={(e) =>
+                            updateLead(lead.id, { assignedAgentId: e.target.value })
+                          }
+                          className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                        >
+                          {teamMembers.map((tm) => (
+                            <option key={tm.id} value={tm.id}>
+                              {tm.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap space-x-1.5">
+                        <Link
+                          to={`/leads/${lead.id}`}
+                          className="px-2.5 py-1.5 text-xs font-semibold bg-slate-900 text-white rounded-md hover:bg-slate-800"
+                        >
+                          Dossier
+                        </Link>
+                        <button
+                          onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
+                          className="px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-100 text-slate-700 cursor-pointer"
+                        >
+                          Chat
+                        </button>
+                        {currentUser.role !== 'AGENT' && (
+                          <button
+                            onClick={() => deleteLead(lead.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            title="Delete Lead"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 inline" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        {/* Pagination Controls */}
-        <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-xs text-slate-600">
-          <div>
-            Showing page <span className="font-mono font-semibold">{page}</span> of{' '}
-            <span className="font-mono font-semibold">{totalPages}</span> ({enrichedLeads.length} total leads)
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 text-xs text-slate-600">
+              <div>
+                Showing page <span className="font-mono font-semibold">{page}</span> of{' '}
+                <span className="font-mono font-semibold">{totalPages}</span> ({enrichedLeads.length}{' '}
+                total leads)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1 border border-slate-200 rounded-md disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1 border border-slate-200 rounded-md disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* PIPELINE STAGE BOARD (KANBAN) VIEW */
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3 pt-2">
+            {boardStages.map((stage) => {
+              const stageItems = enrichedLeads.filter(({ lead }) => lead.leadStatus === stage);
+              const stageSum = stageItems.reduce(
+                (s, { lead }) => s + (lead.estimatedValueInr || 0),
+                0
+              );
+              return (
+                <div
+                  key={stage}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5 min-h-[420px]"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="text-xs font-bold text-slate-900">
+                      {stage} ({stageItems.length})
+                    </span>
+                    <span className="text-[11px] font-mono font-semibold text-emerald-700 tabular-nums">
+                      {formatLakhs(stageSum)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 flex-1">
+                    {stageItems.map(({ lead, contact }) => (
+                      <div
+                        key={lead.id}
+                        className="bg-white border border-slate-200 rounded-lg p-3 shadow-2xs space-y-2 hover:border-slate-400 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <Link
+                            to={`/leads/${lead.id}`}
+                            className="text-xs font-bold text-slate-900 hover:text-emerald-700"
+                          >
+                            {contact?.name}
+                          </Link>
+                          <span className="text-[11px] font-mono font-bold text-emerald-700 tabular-nums">
+                            {lead.leadScore}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 font-medium">
+                          {lead.interestedService}
+                        </div>
+                        <div className="text-[11px] font-mono font-semibold text-slate-900">
+                          {lead.budget}
+                        </div>
+                        {lead.buyingSignals[0] && (
+                          <div className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2 py-1 rounded leading-snug">
+                            • {lead.buyingSignals[0]}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="px-3 py-1 border border-slate-200 rounded disabled:opacity-40 hover:bg-slate-50"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="px-3 py-1 border border-slate-200 rounded disabled:opacity-40 hover:bg-slate-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Create Lead Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-lg max-w-md w-full p-6 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <h3 className="text-sm font-bold text-slate-900">Create New Sales Lead</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-700">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -432,7 +614,9 @@ export const LeadsListPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Initial Lead Score</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Initial Lead Score
+                  </label>
                   <input
                     type="number"
                     min={0}
@@ -485,7 +669,6 @@ export const LeadDetailsPage: React.FC = () => {
   const {
     leads,
     contacts,
-    teamMembers,
     followUps,
     messagesByConv,
     updateLead,
@@ -508,8 +691,10 @@ export const LeadDetailsPage: React.FC = () => {
     return <div className="p-8 text-xs text-slate-500">Lead record not found.</div>;
   }
 
+  const sb = lead.scoreBreakdown;
+
   return (
-    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <Link
@@ -519,22 +704,28 @@ export const LeadDetailsPage: React.FC = () => {
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Lead Pipeline</span>
           </Link>
-          <h1 className="text-xl font-bold text-slate-900 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">
             {contact?.name} — {lead.interestedService}
           </h1>
-          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-            <span className="font-mono">{contact?.phone}</span>
+          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
+            <span className="font-mono font-semibold text-slate-800">{contact?.phone}</span>
             <span aria-hidden="true">·</span>
-            <span>{contact?.company}</span>
+            <span>
+              {contact?.company} ({contact?.roleTitle || 'Decision Maker'})
+            </span>
             <span aria-hidden="true">·</span>
             <span>Source: {lead.source}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-700 font-semibold">
+              Best Time: {contact?.bestTimeToContact || '10:00 AM – 6:00 PM IST'}
+            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Open WhatsApp Conversation</span>
@@ -542,22 +733,111 @@ export const LeadDetailsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Executive Next Best Action Banner */}
+      <div className="bg-[#0B1120] text-white rounded-xl p-5 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5" />
+            <span>AI RECOMMENDED NEXT BEST ACTION PLAYBOOK · {lead.customerSentiment}</span>
+          </div>
+          <p className="text-sm font-semibold text-white">{lead.recommendedNextAction}</p>
+        </div>
+        <button
+          onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
+          className="px-4 py-2 bg-white text-slate-900 text-xs font-bold rounded-lg hover:bg-emerald-50 shrink-0 cursor-pointer"
+        >
+          Execute in WhatsApp Inbox →
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Columns: Qualification Dossier & Conversation History */}
+        {/* Left 2 Columns: Qualification Dossier, 5-Factor Rubric, Buying Signals & Transcript */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
-                  AI Lead Qualification & Score Breakdown
+                  AI Lead Qualification & 5-Factor Score Rubric
                 </h2>
                 <p className="text-xs text-slate-500">
                   Updated {lead.updatedAt} · Last interaction {lead.lastInteractionAt}
                 </p>
               </div>
               <div className="text-right font-mono tabular-nums">
-                <div className="text-2xl font-bold text-rose-700">{lead.leadScore} / 100</div>
+                <div className="text-2xl font-bold text-emerald-700">{lead.leadScore} / 100</div>
                 <div className="text-xs font-semibold text-slate-700">{lead.leadType}</div>
+              </div>
+            </div>
+
+            {/* 5-Factor Score Bars */}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              {[
+                { label: 'Budget Readiness', val: sb.budgetReadiness, max: 25 },
+                { label: 'Scope Specificity', val: sb.needSpecificity, max: 25 },
+                { label: 'Timeline Urgency', val: sb.timelineUrgency, max: 20 },
+                { label: 'Decision Authority', val: sb.decisionAuthority, max: 15 },
+                { label: 'Chat Engagement', val: sb.engagementDepth, max: 15 }
+              ].map((item) => {
+                const pct = Math.round((item.val / item.max) * 100);
+                return (
+                  <div key={item.label} className="space-y-1.5">
+                    <div className="text-[11px] font-medium text-slate-600">{item.label}</div>
+                    <div className="text-sm font-bold font-mono tabular-nums text-slate-900">
+                      {item.val} <span className="text-xs font-normal text-slate-400">/ {item.max}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-sm overflow-hidden">
+                      <div
+                        className={`h-full ${
+                          pct >= 80
+                            ? 'bg-emerald-600'
+                            : pct >= 55
+                            ? 'bg-amber-500'
+                            : 'bg-slate-400'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Buying Signals & Objections Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-2">
+                <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <span>Extracted Buying Signals ({lead.buyingSignals.length})</span>
+                </div>
+                <ul className="space-y-1.5 text-xs text-slate-700">
+                  {lead.buyingSignals.map((sig, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-emerald-600 font-bold">•</span>
+                      <span>{sig}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 space-y-2">
+                <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                  <span>Detected Objections / Deal Risks ({lead.detectedObjections.length})</span>
+                </div>
+                {lead.detectedObjections.length > 0 ? (
+                  <ul className="space-y-1.5 text-xs text-slate-700">
+                    {lead.detectedObjections.map((obj, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-amber-600 font-bold">•</span>
+                        <span>{obj}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">
+                    No active objections detected for this lead.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -612,7 +892,7 @@ export const LeadDetailsPage: React.FC = () => {
             {/* Extracted Requirements */}
             <div>
               <div className="text-xs font-semibold text-slate-700 mb-2">
-                Extracted Customer Requirements
+                Extracted Customer Technical Requirements
               </div>
               <ul className="space-y-1.5 text-xs text-slate-700 list-disc list-inside mb-3">
                 {lead.requirements.map((r, i) => (
@@ -648,21 +928,24 @@ export const LeadDetailsPage: React.FC = () => {
           </div>
 
           {/* Linked WhatsApp Conversation Transcript */}
-          <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-2xs">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-sm font-bold text-slate-900">
                 WhatsApp Conversation History ({convMessages.length} messages)
               </h3>
               <Link
                 to={`/inbox?convId=${lead.conversationId}`}
-                className="text-xs font-semibold text-slate-900 underline"
+                className="text-xs font-semibold text-emerald-700 hover:underline"
               >
-                Reply in Live Inbox
+                Reply in Live Inbox →
               </Link>
             </div>
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {convMessages.map((m) => (
-                <div key={m.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                <div
+                  key={m.id}
+                  className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                >
                   <div className="flex justify-between text-[11px] text-slate-500 mb-1">
                     <span className="font-semibold text-slate-800">
                       {m.senderName} ({m.senderType})
@@ -678,7 +961,7 @@ export const LeadDetailsPage: React.FC = () => {
 
         {/* Right Column: Follow-ups & Notes */}
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-2xs">
             <h3 className="text-sm font-bold text-slate-900">Schedule Follow-up</h3>
             <form
               onSubmit={(e) => {
@@ -740,7 +1023,7 @@ export const LeadDetailsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-2xs">
             <h3 className="text-sm font-bold text-slate-900">Lead Notes</h3>
             <form
               onSubmit={(e) => {
@@ -767,7 +1050,10 @@ export const LeadDetailsPage: React.FC = () => {
             </form>
             <div className="space-y-2">
               {lead.notes.map((n) => (
-                <div key={n.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                <div
+                  key={n.id}
+                  className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                >
                   <div className="text-[11px] text-slate-500">
                     {n.authorName} · {n.createdAt}
                   </div>

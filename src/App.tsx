@@ -4,6 +4,7 @@ import { CRMProvider } from './context/CRMContext';
 import { CRMWorkspaceLayout } from './layouts/CRMWorkspaceLayout';
 import { LoginPage, ForgotPasswordPage, ResetPasswordPage } from './pages/AuthPages';
 import { DashboardPage } from './pages/DashboardPage';
+import { AIInsightsPage } from './pages/AIInsightsPage';
 import { WhatsAppInboxPage } from './pages/WhatsAppInboxPage';
 import { ConversationsPage } from './pages/ConversationsPage';
 import { LeadsListPage, LeadDetailsPage } from './pages/LeadsPages';
@@ -35,6 +36,14 @@ export default function App() {
             element={
               <CRMWorkspaceLayout>
                 <DashboardPage />
+              </CRMWorkspaceLayout>
+            }
+          />
+          <Route
+            path="/insights"
+            element={
+              <CRMWorkspaceLayout>
+                <AIInsightsPage />
               </CRMWorkspaceLayout>
             }
           />

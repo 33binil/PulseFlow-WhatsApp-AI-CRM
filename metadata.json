@@ -1,0 +1,6 @@
+{
+  "name": "PulseFlow WhatsApp AI CRM",
+  "description": "Production-grade AI-Powered WhatsApp CRM for managing customer conversations, automated replies, lead qualification, scoring, human handoff, and sales operations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

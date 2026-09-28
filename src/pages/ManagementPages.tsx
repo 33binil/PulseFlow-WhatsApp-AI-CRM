@@ -1,0 +1,1172 @@
+import React, { useState } from 'react';
+import {
+  Plus,
+  Trash2,
+  Copy,
+  Check,
+  Save,
+  X,
+  ShieldCheck
+} from 'lucide-react';
+import { useCRM } from '../context/CRMContext';
+import { KnowledgeCategory, UserRole } from '../types/crm';
+import {
+  ARCHITECTURE_SECTIONS,
+  MONGOOSE_MODELS,
+  API_CONTRACTS,
+  DEVELOPMENT_PHASES
+} from '../data/architectureBlueprint';
+
+/* 1. TEAM MEMBERS PAGE */
+export const TeamMembersPage: React.FC = () => {
+  const { teamMembers, currentUser, addTeamMember, updateTeamMember, deleteTeamMember } = useCRM();
+  const [showModal, setShowModal] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('+91 98470 ');
+  const [role, setRole] = useState<UserRole>('AGENT');
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    addTeamMember({ name, email, phone, role, isActive: true });
+    setShowModal(false);
+    setName('');
+    setEmail('');
+  };
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs text-slate-500">Role-Based Access Control (ADMIN, MANAGER, AGENT)</div>
+          <h1 className="text-xl font-bold text-slate-900 mt-0.5">
+            Team Members ({teamMembers.length})
+          </h1>
+        </div>
+        {currentUser.role === 'ADMIN' && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Team Member</span>
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-5 overflow-x-auto">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-500">
+              <th className="py-2.5 px-3 font-semibold">Name & Email</th>
+              <th className="py-2.5 px-3 font-semibold">Phone</th>
+              <th className="py-2.5 px-3 font-semibold">Role</th>
+              <th className="py-2.5 px-3 font-semibold text-right">Assigned Leads</th>
+              <th className="py-2.5 px-3 font-semibold">Status</th>
+              <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {teamMembers.map((tm) => (
+              <tr key={tm.id} className="hover:bg-slate-50">
+                <td className="py-3 px-3">
+                  <div className="font-bold text-slate-900">{tm.name}</div>
+                  <div className="text-[11px] text-slate-500">{tm.email}</div>
+                </td>
+                <td className="py-3 px-3 font-mono text-slate-600 tabular-nums">{tm.phone}</td>
+                <td className="py-3 px-3">
+                  {currentUser.role === 'ADMIN' ? (
+                    <select
+                      value={tm.role}
+                      onChange={(e) =>
+                        updateTeamMember(tm.id, { role: e.target.value as UserRole })
+                      }
+                      className="px-2 py-1 border border-slate-200 rounded bg-white font-mono text-xs"
+                    >
+                      <option value="ADMIN">ADMIN</option>
+                      <option value="MANAGER">MANAGER</option>
+                      <option value="AGENT">AGENT</option>
+                    </select>
+                  ) : (
+                    <span className="font-mono font-semibold">{tm.role}</span>
+                  )}
+                </td>
+                <td className="py-3 px-3 text-right font-mono tabular-nums">
+                  {tm.assignedLeadsCount}
+                </td>
+                <td className="py-3 px-3">
+                  <span
+                    className={`font-semibold ${
+                      tm.isActive ? 'text-emerald-700' : 'text-slate-400'
+                    }`}
+                  >
+                    {tm.isActive ? 'Active' : 'Suspended'}
+                  </span>
+                </td>
+                <td className="py-3 px-3 text-right whitespace-nowrap space-x-2">
+                  {currentUser.role === 'ADMIN' && (
+                    <>
+                      <button
+                        onClick={() => updateTeamMember(tm.id, { isActive: !tm.isActive })}
+                        className="px-2.5 py-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-700"
+                      >
+                        {tm.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        onClick={() => deleteTeamMember(tm.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-lg max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-sm font-bold text-slate-900">Invite Team Member</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAdd} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Work Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="MANAGER">MANAGER</option>
+                    <option value="AGENT">AGENT</option>
+                  </select>
+                </div>
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-lg"
+                >
+                  Provision Account
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* 2. AI SETTINGS PAGE */
+export const AISettingsPage: React.FC = () => {
+  const { aiSettings, updateAISettings } = useCRM();
+  const [formState, setFormState] = useState(aiSettings);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateAISettings(formState);
+  };
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs text-slate-500">
+            AI Reply Engine, Lead Scoring Thresholds, Multi-Language & System Prompt
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mt-0.5">AI Behavior & Model Settings</h1>
+        </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>Save AI Settings</span>
+        </button>
+      </div>
+
+      <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">Model, Language & Auto-Reply Controls</h2>
+
+          <div className="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div className="font-semibold text-slate-900">AI Engine Master Toggle</div>
+              <div className="text-[11px] text-slate-500">
+                Enable AI analysis, intent detection, and lead scoring
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={formState.aiEnabled}
+              onChange={(e) => setFormState({ ...formState, aiEnabled: e.target.checked })}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div className="font-semibold text-slate-900">Automated WhatsApp Reply</div>
+              <div className="text-[11px] text-slate-500">
+                Automatically reply to incoming WhatsApp messages unless taken over by human
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={formState.autoReplyEnabled}
+              onChange={(e) => setFormState({ ...formState, autoReplyEnabled: e.target.checked })}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">AI Service Provider</label>
+              <select
+                value={formState.provider}
+                onChange={(e) =>
+                  setFormState({ ...formState, provider: e.target.value as 'OPENAI' | 'GEMINI' })
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
+              >
+                <option value="OPENAI">OpenAI API (Primary)</option>
+                <option value="GEMINI">Google Gemini API (Service Layer)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Model Identifier</label>
+              <select
+                value={formState.model}
+                onChange={(e) => setFormState({ ...formState, model: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white font-mono"
+              >
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Temperature ({formState.temperature})
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={formState.temperature}
+                onChange={(e) =>
+                  setFormState({ ...formState, temperature: Number(e.target.value) })
+                }
+                className="w-full accent-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Max Response Words
+              </label>
+              <input
+                type="number"
+                value={formState.maxResponseLength}
+                onChange={(e) =>
+                  setFormState({ ...formState, maxResponseLength: Number(e.target.value) })
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Business Tone</label>
+              <select
+                value={formState.businessTone}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    businessTone: e.target.value as typeof formState.businessTone
+                  })
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
+              >
+                <option value="PROFESSIONAL">Professional</option>
+                <option value="CONSULTATIVE">Consultative</option>
+                <option value="FRIENDLY">Friendly</option>
+                <option value="CONCISE">Concise</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Default Response Language
+              </label>
+              <select
+                value={formState.responseLanguage}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    responseLanguage: e.target.value as typeof formState.responseLanguage
+                  })
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
+              >
+                <option value="AUTO">Auto-Detect (English / Malayalam / Manglish)</option>
+                <option value="ENGLISH">English Default</option>
+                <option value="MANGLISH">Manglish Preferred</option>
+                <option value="MALAYALAM">Malayalam Preferred</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Lead Score Thresholds & System Prompt */}
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">
+            Lead Score Thresholds (0–100) & Human Handoff
+          </h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+              <div className="text-[11px] text-slate-500">COLD Max</div>
+              <input
+                type="number"
+                value={formState.scoreThresholds.coldMax}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    scoreThresholds: {
+                      ...formState.scoreThresholds,
+                      coldMax: Number(e.target.value)
+                    }
+                  })
+                }
+                className="w-full mt-1 px-2 py-1 border border-slate-200 rounded bg-white font-mono"
+              />
+            </div>
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+              <div className="text-[11px] text-slate-500">WARM Max</div>
+              <input
+                type="number"
+                value={formState.scoreThresholds.warmMax}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    scoreThresholds: {
+                      ...formState.scoreThresholds,
+                      warmMax: Number(e.target.value)
+                    }
+                  })
+                }
+                className="w-full mt-1 px-2 py-1 border border-slate-200 rounded bg-white font-mono"
+              />
+            </div>
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+              <div className="text-[11px] text-slate-500">QUALIFIED Max</div>
+              <input
+                type="number"
+                value={formState.scoreThresholds.qualifiedMax}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    scoreThresholds: {
+                      ...formState.scoreThresholds,
+                      qualifiedMax: Number(e.target.value)
+                    }
+                  })
+                }
+                className="w-full mt-1 px-2 py-1 border border-slate-200 rounded bg-white font-mono"
+              />
+            </div>
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+              <div className="text-[11px] text-rose-700 font-semibold">HOT Minimum</div>
+              <input
+                type="number"
+                value={formState.scoreThresholds.hotMin}
+                onChange={(e) =>
+                  setFormState({
+                    ...formState,
+                    scoreThresholds: {
+                      ...formState.scoreThresholds,
+                      hotMin: Number(e.target.value)
+                    }
+                  })
+                }
+                className="w-full mt-1 px-2 py-1 border border-slate-200 rounded bg-white font-mono font-bold"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-1">
+              <label className="font-semibold text-slate-700">
+                Human Handoff Confidence Threshold
+              </label>
+              <span className="font-mono font-bold text-slate-900">
+                {formState.humanHandoffThreshold.toFixed(2)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0.4}
+              max={0.95}
+              step={0.05}
+              value={formState.humanHandoffThreshold}
+              onChange={(e) =>
+                setFormState({ ...formState, humanHandoffThreshold: Number(e.target.value) })
+              }
+              className="w-full accent-slate-900"
+            />
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              When AI confidence falls below {formState.humanHandoffThreshold.toFixed(2)}, auto-reply stops and the thread is flagged for Human Attention.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Configurable AI System Prompt
+            </label>
+            <textarea
+              rows={8}
+              value={formState.systemPrompt}
+              onChange={(e) => setFormState({ ...formState, systemPrompt: e.target.value })}
+              className="w-full p-3 border border-slate-200 rounded-lg font-mono text-xs leading-relaxed"
+            />
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+/* 3. KNOWLEDGE BASE PAGE */
+export const KnowledgeBasePage: React.FC = () => {
+  const {
+    knowledgeBase,
+    currentUser,
+    addKnowledgeArticle,
+    updateKnowledgeArticle,
+    deleteKnowledgeArticle
+  } = useCRM();
+
+  const [catFilter, setCatFilter] = useState<string>('ALL');
+  const [showModal, setShowModal] = useState(false);
+  const [category, setCategory] = useState<KnowledgeCategory>('SERVICES');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [keywords, setKeywords] = useState('');
+
+  const categories: KnowledgeCategory[] = [
+    'COMPANY_INFO',
+    'SERVICES',
+    'PRICING',
+    'FAQ',
+    'BUSINESS_HOURS',
+    'LOCATIONS',
+    'CONTACT_INFO',
+    'POLICIES',
+    'PRODUCT_INFO',
+    'SALES_INFO'
+  ];
+
+  const filtered = knowledgeBase.filter((k) =>
+    catFilter === 'ALL' ? true : k.category === catFilter
+  );
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    addKnowledgeArticle({
+      category,
+      title,
+      content,
+      keywords: keywords
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      isActive: true
+    });
+    setShowModal(false);
+    setTitle('');
+    setContent('');
+    setKeywords('');
+  };
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs text-slate-500">
+            Authoritative Source of Truth Injected into AI Context
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mt-0.5">
+            Company Knowledge Base ({filtered.length} entries)
+          </h1>
+        </div>
+        {currentUser.role === 'ADMIN' && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Knowledge Entry</span>
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
+        <button
+          onClick={() => setCatFilter('ALL')}
+          className={`px-3 py-1.5 text-xs font-medium rounded-md ${
+            catFilter === 'ALL' ? 'bg-white text-slate-900 font-semibold shadow-xs' : 'text-slate-600'
+          }`}
+        >
+          ALL
+        </button>
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCatFilter(cat)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap ${
+              catFilter === cat ? 'bg-white text-slate-900 font-semibold shadow-xs' : 'text-slate-600'
+            }`}
+          >
+            {cat.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {filtered.map((item) => (
+          <div
+            key={item.id}
+            className="bg-white border border-slate-200 rounded-lg p-5 flex flex-col justify-between space-y-3"
+          >
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-mono font-semibold text-slate-700">{item.category}</span>
+                <span>Updated {item.updatedAt}</span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 mt-1">{item.title}</h3>
+              <p className="text-xs text-slate-600 mt-2 whitespace-pre-line leading-relaxed">
+                {item.content}
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <div className="text-[11px] text-slate-500 truncate">
+                Keywords: {item.keywords.join(' · ')}
+              </div>
+              {currentUser.role === 'ADMIN' && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() =>
+                      updateKnowledgeArticle(item.id, { isActive: !item.isActive })
+                    }
+                    className={`font-semibold ${
+                      item.isActive ? 'text-emerald-700' : 'text-slate-400'
+                    }`}
+                  >
+                    {item.isActive ? 'Active in AI' : 'Disabled'}
+                  </button>
+                  <button
+                    onClick={() => deleteKnowledgeArticle(item.id)}
+                    className="text-slate-400 hover:text-rose-600"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-lg max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-sm font-bold text-slate-900">Add Knowledge Base Entry</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAdd} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., Custom ERP Integration Pricing"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Authoritative Content (Used by AI)
+                </label>
+                <textarea
+                  rows={5}
+                  required
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Provide factual service details, pricing ranges, and policies..."
+                  className="w-full p-2.5 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  placeholder="erp, sap, pricing, branches"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-lg"
+                >
+                  Save Knowledge Entry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* 4. WHATSAPP SETTINGS PAGE */
+export const WhatsAppSettingsPage: React.FC = () => {
+  const { whatsappSettings, updateWhatsAppSettings } = useCRM();
+  const [form, setForm] = useState(whatsappSettings);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs text-slate-500">
+            Meta WhatsApp Business Cloud API & Webhook Configuration
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mt-0.5">WhatsApp Cloud API Settings</h1>
+        </div>
+        <button
+          onClick={() => updateWhatsAppSettings(form)}
+          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>Save Configuration</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <h2 className="text-sm font-bold text-slate-900">Webhook & Business Account Identifiers</h2>
+            <span className="text-emerald-700 font-semibold">
+              Connected · Last Event {form.lastWebhookAt}
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Webhook Callback Endpoint (GET & POST)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={form.webhookUrl}
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => handleCopy(form.webhookUrl)}
+                className="px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                WhatsApp Phone Number ID
+              </label>
+              <input
+                type="text"
+                value={form.phoneNumberId}
+                onChange={(e) => setForm({ ...form, phoneNumberId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                WhatsApp Business Account ID
+              </label>
+              <input
+                type="text"
+                value={form.businessAccountId}
+                onChange={(e) => setForm({ ...form, businessAccountId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Connected Display Phone Number
+            </label>
+            <input
+              type="text"
+              value={form.displayPhoneNumber}
+              onChange={(e) => setForm({ ...form, displayPhoneNumber: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+            />
+          </div>
+
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 flex items-start gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+            <span>
+              <strong>Server-Side Credential Isolation:</strong> Your permanent <code className="font-mono">WHATSAPP_ACCESS_TOKEN</code> and <code className="font-mono">WHATSAPP_VERIFY_TOKEN</code> are stored strictly in backend environment variables and are never exposed to the browser.
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">
+            External Automation & n8n Workflow Compatibility
+          </h2>
+          <p className="text-slate-600 leading-relaxed">
+            Optionally forward qualified Hot Leads, Human Handoff escalations, and overdue Follow-up events to an external n8n webhook for custom notifications and external CRM workflows.
+          </p>
+
+          <div className="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div className="font-semibold text-slate-900">Enable n8n Event Webhook Forwarding</div>
+              <div className="text-[11px] text-slate-500">
+                Emits JSON events on lead.hot, conversation.handoff, and followup.due
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={form.n8nEnabled}
+              onChange={(e) => setForm({ ...form, n8nEnabled: e.target.checked })}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">n8n Webhook Target URL</label>
+            <input
+              type="url"
+              value={form.n8nWebhookUrl}
+              onChange={(e) => setForm({ ...form, n8nWebhookUrl: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* 5. COMPANY SETTINGS PAGE */
+export const CompanySettingsPage: React.FC = () => {
+  const { companySettings, updateCompanySettings } = useCRM();
+  const [form, setForm] = useState(companySettings);
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs text-slate-500">Organization Profile & Business Hours</div>
+          <h1 className="text-xl font-bold text-slate-900 mt-0.5">Company Settings</h1>
+        </div>
+        <button
+          onClick={() => updateCompanySettings(form)}
+          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>Save Company Profile</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">Organization Identity</h2>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Company Legal Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Industry</label>
+              <input
+                type="text"
+                value={form.industry}
+                onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Currency</label>
+              <input
+                type="text"
+                value={form.currency}
+                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Support Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Primary Phone</label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Headquarters Address</label>
+            <input
+              type="text"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            />
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900">Operating Business Hours ({form.timezone})</h2>
+          <div className="divide-y divide-slate-100">
+            {form.businessHours.map((bh, idx) => (
+              <div key={bh.day} className="py-2 flex items-center justify-between">
+                <span className="font-semibold text-slate-800 w-28">{bh.day}</span>
+                <label className="flex items-center gap-1.5 text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={bh.isOpen}
+                    onChange={(e) => {
+                      const next = [...form.businessHours];
+                      next[idx] = { ...bh, isOpen: e.target.checked };
+                      setForm({ ...form, businessHours: next });
+                    }}
+                    className="accent-slate-900"
+                  />
+                  <span>{bh.isOpen ? 'Open' : 'Closed'}</span>
+                </label>
+                {bh.isOpen ? (
+                  <span className="font-mono text-slate-700 tabular-nums">
+                    {bh.open} – {bh.close}
+                  </span>
+                ) : (
+                  <span className="text-slate-400">AI 24/7 Auto-Reply Only</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* 6. PROFILE & GENERAL SETTINGS PAGE */
+export const ProfileSettingsPage: React.FC<{ mode: 'profile' | 'general' }> = ({ mode }) => {
+  const { currentUser, updateTeamMember, pushToast } = useCRM();
+  const [name, setName] = useState(currentUser.name);
+  const [phone, setPhone] = useState(currentUser.phone);
+  const [hotLeadAlert, setHotLeadAlert] = useState(true);
+  const [handoffAlert, setHandoffAlert] = useState(true);
+  const [followUpAlert, setFollowUpAlert] = useState(true);
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div>
+        <div className="text-xs text-slate-500">Account & Workspace Preferences</div>
+        <h1 className="text-xl font-bold text-slate-900 mt-0.5">
+          {mode === 'profile' ? 'My User Profile' : 'General CRM Settings'}
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">Personal Details & Role</h2>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Email</label>
+            <input
+              type="email"
+              readOnly
+              value={currentUser.email}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Phone</label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Assigned Role</label>
+              <input
+                type="text"
+                readOnly
+                value={currentUser.role}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-mono font-bold"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => updateTeamMember(currentUser.id, { name, phone })}
+            className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-lg"
+          >
+            Update Profile
+          </button>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900">Real-Time Notification Preferences</h2>
+          <label className="flex items-center justify-between py-2 border-b border-slate-100">
+            <span>Instant alert when AI qualifies a new HOT Lead (Score 81+)</span>
+            <input
+              type="checkbox"
+              checked={hotLeadAlert}
+              onChange={(e) => setHotLeadAlert(e.target.checked)}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </label>
+          <label className="flex items-center justify-between py-2 border-b border-slate-100">
+            <span>High-priority alert when Human Handoff is triggered</span>
+            <input
+              type="checkbox"
+              checked={handoffAlert}
+              onChange={(e) => setHandoffAlert(e.target.checked)}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </label>
+          <label className="flex items-center justify-between py-2 border-b border-slate-100">
+            <span>Daily reminder for pending and overdue Follow-ups</span>
+            <input
+              type="checkbox"
+              checked={followUpAlert}
+              onChange={(e) => setFollowUpAlert(e.target.checked)}
+              className="w-4 h-4 accent-slate-900"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              pushToast('Preferences Saved', 'Notification triggers updated.', 'success')
+            }
+            className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-lg"
+          >
+            Save Notification Rules
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* 7. PHASE 1 ARCHITECTURE BLUEPRINT REFERENCE PAGE */
+export const ArchitectureBlueprintPage: React.FC = () => {
+  const [selectedModel, setSelectedModel] = useState(MONGOOSE_MODELS[0]);
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      <div>
+        <div className="text-xs text-slate-500">Phase 1 Approved Engineering Blueprint</div>
+        <h1 className="text-xl font-bold text-slate-900 mt-0.5">
+          System Architecture, Mongoose Schemas & 12-Phase Tracker
+        </h1>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-5">
+        <h2 className="text-sm font-bold text-slate-900 mb-3">12-Phase Implementation Progress</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-500">
+                <th className="py-2 px-3 font-semibold">Phase</th>
+                <th className="py-2 px-3 font-semibold">Milestone</th>
+                <th className="py-2 px-3 font-semibold">Deliverables</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {DEVELOPMENT_PHASES.map((p) => (
+                <tr key={p.phase}>
+                  <td className="py-2 px-3 font-mono font-bold tabular-nums">
+                    Phase {p.phase}
+                  </td>
+                  <td className="py-2 px-3 font-semibold text-slate-900">{p.name}</td>
+                  <td className="py-2 px-3 text-slate-600">{p.deliverables}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900">Mongoose Models ({MONGOOSE_MODELS.length})</h2>
+          <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
+            {MONGOOSE_MODELS.map((m) => (
+              <button
+                key={m.name}
+                onClick={() => setSelectedModel(m)}
+                className={`px-2.5 py-1 text-xs rounded ${
+                  selectedModel.name === m.name
+                    ? 'bg-white text-slate-900 font-semibold shadow-xs'
+                    : 'text-slate-600'
+                }`}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs space-y-1">
+            <div className="font-semibold text-slate-900">{selectedModel.purpose}</div>
+            <div className="font-mono text-[11px] text-slate-500">
+              Indexes: {selectedModel.indexes.join(' · ')}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-2">
+          <h2 className="text-sm font-bold text-slate-900">
+            REST API Contracts ({API_CONTRACTS.length} Routes)
+          </h2>
+          <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 text-xs">
+            {API_CONTRACTS.map((api, idx) => (
+              <div key={idx} className="py-1.5 flex items-center justify-between">
+                <span className="font-mono font-semibold text-slate-900">
+                  {api.method} {api.endpoint}
+                </span>
+                <span className="text-slate-500">{api.module}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

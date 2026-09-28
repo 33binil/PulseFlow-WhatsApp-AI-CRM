@@ -17,9 +17,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
-import { LeadStatus, LeadType } from '../types/crm';
 
-export const LeadsListPage: React.FC = () => {
+export const LeadsListPage = () => {
   const {
     leads,
     contacts,
@@ -32,12 +31,12 @@ export const LeadsListPage: React.FC = () => {
   } = useCRM();
   const navigate = useNavigate();
 
-  const [viewMode, setViewMode] = useState<'TABLE' | 'BOARD'>('TABLE');
+  const [viewMode, setViewMode] = useState('TABLE');
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [agentFilter, setAgentFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<'score' | 'created'>('score');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [agentFilter, setAgentFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('score');
   const [page, setPage] = useState(1);
   const pageSize = 6;
 
@@ -50,7 +49,7 @@ export const LeadsListPage: React.FC = () => {
   const [newBudget, setNewBudget] = useState('₹1,00,000');
   const [newTimeline, setNewTimeline] = useState('Next month');
   const [newScore, setNewScore] = useState(85);
-  const [newType, setNewType] = useState<LeadType>('HOT');
+  const [newType, setNewType] = useState('HOT');
 
   const enrichedLeads = useMemo(() => {
     return leads
@@ -95,7 +94,7 @@ export const LeadsListPage: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(enrichedLeads.length / pageSize));
   const paginatedLeads = enrichedLeads.slice((page - 1) * pageSize, page * pageSize);
 
-  const handleCreateLead = (e: React.FormEvent) => {
+  const handleCreateLead = (e) => {
     e.preventDefault();
     const createdContact = addContact({
       name: newName,
@@ -126,9 +125,9 @@ export const LeadsListPage: React.FC = () => {
     setNewPhone('+91 ');
   };
 
-  const formatLakhs = (val: number) => `₹${(val / 100000).toFixed(2)}L`;
+  const formatLakhs = (val) => `₹${(val / 100000).toFixed(2)}L`;
 
-  const boardStages: LeadStatus[] = [
+  const boardStages = [
     'NEW',
     'CONTACTED',
     'QUALIFIED',
@@ -237,7 +236,7 @@ export const LeadsListPage: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Lead Type Filter Tabs */}
           <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
-            {(['ALL', 'HOT', 'WARM', 'COLD', 'UNQUALIFIED', 'EXISTING_CUSTOMER'] as const).map(
+            {['ALL', 'HOT', 'WARM', 'COLD', 'UNQUALIFIED', 'EXISTING_CUSTOMER'].map(
               (type) => (
                 <button
                   key={type}
@@ -374,7 +373,7 @@ export const LeadsListPage: React.FC = () => {
                         <select
                           value={lead.leadStatus}
                           onChange={(e) =>
-                            updateLead(lead.id, { leadStatus: e.target.value as LeadStatus })
+                            updateLead(lead.id, { leadStatus: e.target.value })
                           }
                           className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-white font-semibold"
                         >
@@ -630,7 +629,7 @@ export const LeadsListPage: React.FC = () => {
                   <label className="block font-semibold text-slate-700 mb-1">Lead Type</label>
                   <select
                     value={newType}
-                    onChange={(e) => setNewType(e.target.value as LeadType)}
+                    onChange={(e) => setNewType(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                   >
                     <option value="HOT">HOT</option>
@@ -663,8 +662,8 @@ export const LeadsListPage: React.FC = () => {
   );
 };
 
-export const LeadDetailsPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+export const LeadDetailsPage = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const {
     leads,
@@ -856,7 +855,7 @@ export const LeadDetailsPage: React.FC = () => {
                 <select
                   value={lead.leadStatus}
                   onChange={(e) =>
-                    updateLead(lead.id, { leadStatus: e.target.value as LeadStatus })
+                    updateLead(lead.id, { leadStatus: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                 >

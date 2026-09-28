@@ -27,9 +27,8 @@ import {
   Zap
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
-import { UserRole } from '../types/crm';
 
-export const CRMWorkspaceLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const CRMWorkspaceLayout = ({ children }) => {
   const {
     currentUser,
     switchRole,
@@ -96,7 +95,7 @@ export const CRMWorkspaceLayout: React.FC<{ children: React.ReactNode }> = ({ ch
       label: 'Analytics',
       path: '/analytics',
       icon: BarChart3,
-      roles: ['ADMIN', 'MANAGER'] as UserRole[]
+      roles: ['ADMIN', 'MANAGER']
     }
   ];
 
@@ -105,38 +104,38 @@ export const CRMWorkspaceLayout: React.FC<{ children: React.ReactNode }> = ({ ch
       label: 'Team Members',
       path: '/team',
       icon: UserCog,
-      roles: ['ADMIN', 'MANAGER'] as UserRole[]
+      roles: ['ADMIN', 'MANAGER']
     },
     {
       label: 'AI Settings',
       path: '/ai-settings',
       icon: Bot,
-      roles: ['ADMIN'] as UserRole[]
+      roles: ['ADMIN']
     },
     {
       label: 'Knowledge Base',
       path: '/knowledge-base',
       icon: BookOpen,
-      roles: ['ADMIN', 'MANAGER', 'AGENT'] as UserRole[]
+      roles: ['ADMIN', 'MANAGER', 'AGENT']
     },
     {
       label: 'WhatsApp Settings',
       path: '/whatsapp-settings',
       icon: Smartphone,
-      roles: ['ADMIN'] as UserRole[]
+      roles: ['ADMIN']
     },
     {
       label: 'Company Settings',
       path: '/company-settings',
       icon: Building2,
-      roles: ['ADMIN'] as UserRole[]
+      roles: ['ADMIN']
     },
     { label: 'Profile', path: '/profile', icon: UserCircle },
     { label: 'General Settings', path: '/settings', icon: Settings },
     { label: 'Phase 1 Blueprint', path: '/architecture', icon: FileCode2 }
   ];
 
-  const isPathActive = (path: string) => {
+  const isPathActive = (path) => {
     if (path === '/leads' && location.pathname.startsWith('/leads')) return true;
     if (path === '/contacts' && location.pathname.startsWith('/contacts')) return true;
     return location.pathname === path;
@@ -248,7 +247,7 @@ export const CRMWorkspaceLayout: React.FC<{ children: React.ReactNode }> = ({ ch
           </button>
 
           <div className="hidden sm:flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/60">
-            {(['ADMIN', 'MANAGER', 'AGENT'] as UserRole[]).map((role) => (
+            {['ADMIN', 'MANAGER', 'AGENT'].map((role) => (
               <button
                 key={role}
                 onClick={() => switchRole(role)}

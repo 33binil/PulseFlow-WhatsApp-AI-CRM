@@ -31,7 +31,7 @@ import {
   ANALYTICS_LEAD_SOURCES
 } from '../data/mockCrmData';
 
-export const DashboardPage: React.FC = () => {
+export const DashboardPage = () => {
   const {
     leads,
     contacts,
@@ -76,13 +76,13 @@ export const DashboardPage: React.FC = () => {
     { tier: 'UNQUALIFIED', count: unqualifiedLeads.length }
   ];
 
-  const getContactName = (contactId: string) =>
+  const getContactName = (contactId) =>
     contacts.find((c) => c.id === contactId)?.name || 'Unknown Customer';
 
-  const getContactPhone = (contactId: string) =>
+  const getContactPhone = (contactId) =>
     contacts.find((c) => c.id === contactId)?.phone || '';
 
-  const formatLakhs = (val: number) => `₹${(val / 100000).toFixed(2)}L`;
+  const formatLakhs = (val) => `₹${(val / 100000).toFixed(2)}L`;
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">

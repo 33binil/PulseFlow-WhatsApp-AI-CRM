@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, MessageSquare, UserCheck, Bot, AlertTriangle } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
-export const ConversationsPage: React.FC = () => {
+export const ConversationsPage = () => {
   const {
     conversations,
     contacts,
@@ -14,7 +14,7 @@ export const ConversationsPage: React.FC = () => {
   } = useCRM();
   const navigate = useNavigate();
 
-  const [modeFilter, setModeFilter] = useState<'ALL' | 'AI' | 'HUMAN' | 'ESCALATED'>('ALL');
+  const [modeFilter, setModeFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
   const rows = useMemo(() => {
@@ -60,7 +60,7 @@ export const ConversationsPage: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
-            {(['ALL', 'AI', 'HUMAN', 'ESCALATED'] as const).map((m) => (
+            {['ALL', 'AI', 'HUMAN', 'ESCALATED'].map((m) => (
               <button
                 key={m}
                 onClick={() => setModeFilter(m)}

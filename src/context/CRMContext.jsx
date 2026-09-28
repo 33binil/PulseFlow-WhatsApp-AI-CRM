@@ -1,23 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import {
-  TeamMember,
-  UserRole,
-  Contact,
-  Lead,
-  Conversation,
-  Message,
-  FollowUp,
-  FollowUpStatus,
-  KnowledgeArticle,
-  KnowledgeGapFinding,
-  StrategicFinding,
-  AISettingsConfig,
-  WhatsAppSettingsConfig,
-  CompanySettingsConfig,
-  CRMNotification,
-  AIStructuredMetadata
-} from '../types/crm';
-import {
   INITIAL_TEAM_MEMBERS,
   INITIAL_CONTACTS,
   INITIAL_LEADS,
@@ -33,114 +15,40 @@ import {
   INITIAL_NOTIFICATIONS
 } from '../data/mockCrmData';
 
-interface ToastMessage {
-  id: string;
-  title: string;
-  description?: string;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
-}
+const CRMContext = createContext(undefined);
 
-interface CRMContextValue {
-  currentUser: TeamMember;
-  isAuthenticated: boolean;
-  loginAsRole: (role: UserRole, email?: string) => void;
-  logout: () => void;
-  switchRole: (role: UserRole) => void;
+export const CRMProvider = ({ children }) => {
+  const [teamMembers, setTeamMembers] = useState(INITIAL_TEAM_MEMBERS);
+  const [currentUser, setCurrentUser] = useState(INITIAL_TEAM_MEMBERS[0]);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
-  teamMembers: TeamMember[];
-  addTeamMember: (member: Omit<TeamMember, 'id' | 'assignedLeadsCount' | 'activeChatsCount' | 'lastLoginAt'>) => void;
-  updateTeamMember: (id: string, patch: Partial<TeamMember>) => void;
-  deleteTeamMember: (id: string) => void;
+  const [contacts, setContacts] = useState(INITIAL_CONTACTS);
+  const [leads, setLeads] = useState(INITIAL_LEADS);
+  const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS);
+  const [messagesByConv, setMessagesByConv] = useState(INITIAL_MESSAGES);
+  const [followUps, setFollowUps] = useState(INITIAL_FOLLOW_UPS);
+  const [knowledgeBase, setKnowledgeBase] = useState(INITIAL_KNOWLEDGE_BASE);
+  const [knowledgeGaps, setKnowledgeGaps] = useState(INITIAL_KNOWLEDGE_GAPS);
+  const [strategicFindings] = useState(INITIAL_STRATEGIC_FINDINGS);
+  const [aiSettings, setAISettings] = useState(INITIAL_AI_SETTINGS);
+  const [whatsappSettings, setWhatsAppSettings] = useState(INITIAL_WHATSAPP_SETTINGS);
+  const [companySettings, setCompanySettings] = useState(INITIAL_COMPANY_SETTINGS);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [toasts, setToasts] = useState([]);
 
-  contacts: Contact[];
-  addContact: (contact: Omit<Contact, 'id' | 'createdAt' | 'lastInteractionAt' | 'totalConversations' | 'totalMessages' | 'notes'>) => Contact;
-  updateContact: (id: string, patch: Partial<Contact>) => void;
-  deleteContact: (id: string) => void;
-  addContactNote: (contactId: string, content: string) => void;
+  const pushToast = useCallback((title, description, variant = 'default') => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => [...prev, { id, title, description, variant }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3600);
+  }, []);
 
-  leads: Lead[];
-  addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'lastInteractionAt' | 'notes' | 'scoreBreakdown' | 'estimatedValueInr' | 'buyingSignals' | 'detectedObjections' | 'recommendedNextAction' | 'customerSentiment'> & Partial<Pick<Lead, 'scoreBreakdown' | 'estimatedValueInr' | 'buyingSignals' | 'detectedObjections' | 'recommendedNextAction' | 'customerSentiment'>>) => void;
-  updateLead: (id: string, patch: Partial<Lead>) => void;
-  deleteLead: (id: string) => void;
-  addLeadNote: (leadId: string, content: string) => void;
-
-  conversations: Conversation[];
-  messagesByConv: Record<string, Message[]>;
-  sendAgentMessage: (conversationId: string, content: string) => void;
-  simulateCustomerIncomingMessage: (conversationId: string, content: string, languageHint?: 'English' | 'Manglish' | 'Malayalam') => void;
-  takeOverConversation: (conversationId: string) => void;
-  returnConversationToAI: (conversationId: string) => void;
-  markConversationRead: (conversationId: string) => void;
-
-  followUps: FollowUp[];
-  addFollowUp: (fu: Omit<FollowUp, 'id'>) => void;
-  updateFollowUpStatus: (id: string, status: FollowUpStatus) => void;
-  deleteFollowUp: (id: string) => void;
-
-  knowledgeBase: KnowledgeArticle[];
-  addKnowledgeArticle: (article: Omit<KnowledgeArticle, 'id' | 'updatedAt'>) => void;
-  updateKnowledgeArticle: (id: string, patch: Partial<KnowledgeArticle>) => void;
-  deleteKnowledgeArticle: (id: string) => void;
-
-  knowledgeGaps: KnowledgeGapFinding[];
-  resolveKnowledgeGapToArticle: (gapId: string) => void;
-  strategicFindings: StrategicFinding[];
-
-  aiSettings: AISettingsConfig;
-  updateAISettings: (patch: Partial<AISettingsConfig>) => void;
-
-  whatsappSettings: WhatsAppSettingsConfig;
-  updateWhatsAppSettings: (patch: Partial<WhatsAppSettingsConfig>) => void;
-
-  companySettings: CompanySettingsConfig;
-  updateCompanySettings: (patch: Partial<CompanySettingsConfig>) => void;
-
-  notifications: CRMNotification[];
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
-
-  toasts: ToastMessage[];
-  pushToast: (title: string, description?: string, variant?: ToastMessage['variant']) => void;
-  dismissToast: (id: string) => void;
-}
-
-const CRMContext = createContext<CRMContextValue | undefined>(undefined);
-
-export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM_MEMBERS);
-  const [currentUser, setCurrentUser] = useState<TeamMember>(INITIAL_TEAM_MEMBERS[0]);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-
-  const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
-  const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>(INITIAL_MESSAGES);
-  const [followUps, setFollowUps] = useState<FollowUp[]>(INITIAL_FOLLOW_UPS);
-  const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeArticle[]>(INITIAL_KNOWLEDGE_BASE);
-  const [knowledgeGaps, setKnowledgeGaps] = useState<KnowledgeGapFinding[]>(INITIAL_KNOWLEDGE_GAPS);
-  const [strategicFindings] = useState<StrategicFinding[]>(INITIAL_STRATEGIC_FINDINGS);
-  const [aiSettings, setAISettings] = useState<AISettingsConfig>(INITIAL_AI_SETTINGS);
-  const [whatsappSettings, setWhatsAppSettings] = useState<WhatsAppSettingsConfig>(INITIAL_WHATSAPP_SETTINGS);
-  const [companySettings, setCompanySettings] = useState<CompanySettingsConfig>(INITIAL_COMPANY_SETTINGS);
-  const [notifications, setNotifications] = useState<CRMNotification[]>(INITIAL_NOTIFICATIONS);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const pushToast = useCallback(
-    (title: string, description?: string, variant: ToastMessage['variant'] = 'default') => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      setToasts((prev) => [...prev, { id, title, description, variant }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3600);
-    },
-    []
-  );
-
-  const dismissToast = useCallback((id: string) => {
+  const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const loginAsRole = (role: UserRole, email?: string) => {
+  const loginAsRole = (role, email) => {
     const matched =
       teamMembers.find((m) => (email ? m.email.toLowerCase() === email.toLowerCase() : m.role === role)) ||
       teamMembers.find((m) => m.role === role) ||
@@ -155,17 +63,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Signed out', 'Your session has been closed.');
   };
 
-  const switchRole = (role: UserRole) => {
+  const switchRole = (role) => {
     const matched = teamMembers.find((m) => m.role === role) || teamMembers[0];
     setCurrentUser(matched);
     pushToast(`Switched Active Role to ${role}`, `Now viewing CRM as ${matched.name} (${matched.role})`);
   };
 
   // Team CRUD
-  const addTeamMember = (
-    member: Omit<TeamMember, 'id' | 'assignedLeadsCount' | 'activeChatsCount' | 'lastLoginAt'>
-  ) => {
-    const newMember: TeamMember = {
+  const addTeamMember = (member) => {
+    const newMember = {
       ...member,
       id: `usr-${Date.now()}`,
       assignedLeadsCount: 0,
@@ -176,7 +82,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Team Member Added', `${member.name} (${member.role}) invited.`, 'success');
   };
 
-  const updateTeamMember = (id: string, patch: Partial<TeamMember>) => {
+  const updateTeamMember = (id, patch) => {
     setTeamMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     if (currentUser.id === id) {
       setCurrentUser((prev) => ({ ...prev, ...patch }));
@@ -184,16 +90,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('User Profile Updated', 'Changes saved.', 'success');
   };
 
-  const deleteTeamMember = (id: string) => {
+  const deleteTeamMember = (id) => {
     setTeamMembers((prev) => prev.filter((m) => m.id !== id));
     pushToast('Team Member Removed', 'User account removed.', 'warning');
   };
 
   // Contacts CRUD
-  const addContact = (
-    contact: Omit<Contact, 'id' | 'createdAt' | 'lastInteractionAt' | 'totalConversations' | 'totalMessages' | 'notes'>
-  ): Contact => {
-    const created: Contact = {
+  const addContact = (contact) => {
+    const created = {
       ...contact,
       id: `cnt-${Date.now()}`,
       createdAt: new Date().toISOString().slice(0, 10),
@@ -207,17 +111,17 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return created;
   };
 
-  const updateContact = (id: string, patch: Partial<Contact>) => {
+  const updateContact = (id, patch) => {
     setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
     pushToast('Contact Updated', 'Customer details saved.', 'success');
   };
 
-  const deleteContact = (id: string) => {
+  const deleteContact = (id) => {
     setContacts((prev) => prev.filter((c) => c.id !== id));
     pushToast('Contact Deleted', 'Contact removed from directory.', 'warning');
   };
 
-  const addContactNote = (contactId: string, content: string) => {
+  const addContactNote = (contactId, content) => {
     if (!content.trim()) return;
     const note = {
       id: `cn-${Date.now()}`,
@@ -232,35 +136,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Leads CRUD
-  const addLead = (
-    lead: Omit<
-      Lead,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'lastInteractionAt'
-      | 'notes'
-      | 'scoreBreakdown'
-      | 'estimatedValueInr'
-      | 'buyingSignals'
-      | 'detectedObjections'
-      | 'recommendedNextAction'
-      | 'customerSentiment'
-    > &
-      Partial<
-        Pick<
-          Lead,
-          | 'scoreBreakdown'
-          | 'estimatedValueInr'
-          | 'buyingSignals'
-          | 'detectedObjections'
-          | 'recommendedNextAction'
-          | 'customerSentiment'
-        >
-      >
-  ) => {
+  const addLead = (lead) => {
     const numericVal = parseInt(String(lead.budget).replace(/[^0-9]/g, ''), 10) || 75000;
-    const newLead: Lead = {
+    const newLead = {
       ...lead,
       id: `ld-${Date.now()}`,
       scoreBreakdown: lead.scoreBreakdown || {
@@ -285,7 +163,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Lead Created', `Qualified as ${newLead.leadType} (Score: ${newLead.leadScore}).`, 'success');
   };
 
-  const updateLead = (id: string, patch: Partial<Lead>) => {
+  const updateLead = (id, patch) => {
     setLeads((prev) =>
       prev.map((l) =>
         l.id === id
@@ -296,12 +174,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Lead Updated', 'Pipeline state updated.', 'success');
   };
 
-  const deleteLead = (id: string) => {
+  const deleteLead = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
     pushToast('Lead Deleted', 'Lead removed from pipeline.', 'warning');
   };
 
-  const addLeadNote = (leadId: string, content: string) => {
+  const addLeadNote = (leadId, content) => {
     if (!content.trim()) return;
     const note = {
       id: `ln-${Date.now()}`,
@@ -316,13 +194,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Conversations & WhatsApp Inbox Actions
-  const markConversationRead = (conversationId: string) => {
+  const markConversationRead = (conversationId) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
     );
   };
 
-  const takeOverConversation = (conversationId: string) => {
+  const takeOverConversation = (conversationId) => {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
@@ -335,7 +213,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : c
       )
     );
-    const sysMsg: Message = {
+    const sysMsg = {
       id: `msg-sys-${Date.now()}`,
       conversationId,
       whatsappMessageId: `sys.${Date.now()}`,
@@ -352,7 +230,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Conversation Taken Over', 'AI replies paused. You are now chatting directly with the customer.', 'warning');
   };
 
-  const returnConversationToAI = (conversationId: string) => {
+  const returnConversationToAI = (conversationId) => {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
@@ -366,7 +244,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : c
       )
     );
-    const sysMsg: Message = {
+    const sysMsg = {
       id: `msg-sys-${Date.now()}`,
       conversationId,
       whatsappMessageId: `sys.${Date.now()}`,
@@ -383,10 +261,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Returned to AI Assistant', 'AI auto-reply engine re-enabled for this thread.', 'success');
   };
 
-  const sendAgentMessage = (conversationId: string, content: string) => {
+  const sendAgentMessage = (conversationId, content) => {
     if (!content.trim()) return;
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newMsg: Message = {
+    const newMsg = {
       id: `msg-${Date.now()}`,
       conversationId,
       whatsappMessageId: `wamid.agent.${Date.now()}`,
@@ -415,18 +293,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const simulateCustomerIncomingMessage = (
-    conversationId: string,
-    content: string,
-    languageHint?: 'English' | 'Manglish' | 'Malayalam'
-  ) => {
+  const simulateCustomerIncomingMessage = (conversationId, content, languageHint) => {
     const conv = conversations.find((c) => c.id === conversationId);
     if (!conv || !content.trim()) return;
     const contact = contacts.find((cnt) => cnt.id === conv.contactId);
     const lead = leads.find((ld) => ld.id === conv.leadId);
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const customerMsg: Message = {
+    const customerMsg = {
       id: `msg-cust-${Date.now()}`,
       conversationId,
       whatsappMessageId: `wamid.inbound.${Date.now()}`,
@@ -476,7 +350,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lower.includes('cheyyan');
     const isMalayalam = languageHint === 'Malayalam' || /[\u0D00-\u0D7F]/.test(content);
 
-    let aiStructured: AIStructuredMetadata;
+    let aiStructured;
 
     if (asksForHuman) {
       aiStructured = {
@@ -542,7 +416,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    const aiMsg: Message = {
+    const aiMsg = {
       id: `msg-ai-${Date.now() + 1}`,
       conversationId,
       whatsappMessageId: `wamid.ai.${Date.now() + 1}`,
@@ -604,7 +478,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (aiStructured.needsHuman) {
-      const newNotif: CRMNotification = {
+      const newNotif = {
         id: `notif-${Date.now()}`,
         type: 'HUMAN_ATTENTION',
         title: 'Human Handoff Triggered by AI',
@@ -625,25 +499,25 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Follow-ups CRUD
-  const addFollowUp = (fu: Omit<FollowUp, 'id'>) => {
-    const created: FollowUp = { ...fu, id: `fu-${Date.now()}` };
+  const addFollowUp = (fu) => {
+    const created = { ...fu, id: `fu-${Date.now()}` };
     setFollowUps((prev) => [created, ...prev]);
     pushToast('Follow-up Scheduled', `Scheduled for ${fu.date} at ${fu.time}.`, 'success');
   };
 
-  const updateFollowUpStatus = (id: string, status: FollowUpStatus) => {
+  const updateFollowUpStatus = (id, status) => {
     setFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
     pushToast('Follow-up Updated', `Status marked as ${status}.`, 'success');
   };
 
-  const deleteFollowUp = (id: string) => {
+  const deleteFollowUp = (id) => {
     setFollowUps((prev) => prev.filter((f) => f.id !== id));
     pushToast('Follow-up Removed', 'Task deleted.', 'warning');
   };
 
   // Knowledge Base CRUD
-  const addKnowledgeArticle = (article: Omit<KnowledgeArticle, 'id' | 'updatedAt'>) => {
-    const created: KnowledgeArticle = {
+  const addKnowledgeArticle = (article) => {
+    const created = {
       ...article,
       id: `kb-${Date.now()}`,
       updatedAt: new Date().toISOString().slice(0, 10),
@@ -653,7 +527,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Knowledge Entry Added', `"${created.title}" is now live for AI context.`, 'success');
   };
 
-  const updateKnowledgeArticle = (id: string, patch: Partial<KnowledgeArticle>) => {
+  const updateKnowledgeArticle = (id, patch) => {
     setKnowledgeBase((prev) =>
       prev.map((k) =>
         k.id === id ? { ...k, ...patch, updatedAt: new Date().toISOString().slice(0, 10) } : k
@@ -662,15 +536,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Knowledge Base Updated', 'AI source-of-truth updated.', 'success');
   };
 
-  const deleteKnowledgeArticle = (id: string) => {
+  const deleteKnowledgeArticle = (id) => {
     setKnowledgeBase((prev) => prev.filter((k) => k.id !== id));
     pushToast('Knowledge Entry Deleted', 'Removed from AI context.', 'warning');
   };
 
-  const resolveKnowledgeGapToArticle = (gapId: string) => {
+  const resolveKnowledgeGapToArticle = (gapId) => {
     const gap = knowledgeGaps.find((g) => g.id === gapId);
     if (!gap || gap.resolved) return;
-    const created: KnowledgeArticle = {
+    const created = {
       id: `kb-${Date.now()}`,
       category: gap.suggestedCategory,
       title: gap.suggestedTitle,
@@ -690,23 +564,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Settings
-  const updateAISettings = (patch: Partial<AISettingsConfig>) => {
+  const updateAISettings = (patch) => {
     setAISettings((prev) => ({ ...prev, ...patch }));
     pushToast('AI Settings Saved', 'AI reply engine configuration updated.', 'success');
   };
 
-  const updateWhatsAppSettings = (patch: Partial<WhatsAppSettingsConfig>) => {
+  const updateWhatsAppSettings = (patch) => {
     setWhatsAppSettings((prev) => ({ ...prev, ...patch }));
     pushToast('WhatsApp Settings Saved', 'Cloud API & Webhook settings updated.', 'success');
   };
 
-  const updateCompanySettings = (patch: Partial<CompanySettingsConfig>) => {
+  const updateCompanySettings = (patch) => {
     setCompanySettings((prev) => ({ ...prev, ...patch }));
     pushToast('Company Settings Saved', 'Organization profile updated.', 'success');
   };
 
   // Notifications
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
   };
 
@@ -774,7 +648,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
-export const useCRM = (): CRMContextValue => {
+export const useCRM = () => {
   const ctx = useContext(CRMContext);
   if (!ctx) {
     throw new Error('useCRM must be used within a CRMProvider');

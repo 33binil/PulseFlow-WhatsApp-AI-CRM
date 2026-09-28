@@ -1,12 +1,4 @@
-export interface ArchitectureSection {
-  id: string;
-  number: string;
-  title: string;
-  category: string;
-  summary: string;
-}
-
-export const ARCHITECTURE_SECTIONS: ArchitectureSection[] = [
+export const ARCHITECTURE_SECTIONS = [
   {
     id: 'system-arch',
     number: '01',
@@ -58,15 +50,7 @@ export const ARCHITECTURE_SECTIONS: ArchitectureSection[] = [
   }
 ];
 
-export interface MongooseModelSpec {
-  name: string;
-  collection: string;
-  purpose: string;
-  indexes: string[];
-  fields: { name: string; type: string; required?: boolean; notes: string }[];
-}
-
-export const MONGOOSE_MODELS: MongooseModelSpec[] = [
+export const MONGOOSE_MODELS = [
   {
     name: 'User',
     collection: 'users',
@@ -192,15 +176,7 @@ export const MONGOOSE_MODELS: MongooseModelSpec[] = [
   }
 ];
 
-export interface ApiContractItem {
-  module: string;
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  endpoint: string;
-  roles: string[];
-  description: string;
-}
-
-export const API_CONTRACTS: ApiContractItem[] = [
+export const API_CONTRACTS = [
   { module: 'Authentication', method: 'POST', endpoint: '/api/auth/login', roles: ['Public'], description: 'Validate credentials with bcrypt and issue signed JWT token' },
   { module: 'Authentication', method: 'POST', endpoint: '/api/auth/register', roles: ['ADMIN'], description: 'Create new CRM user account with hashed password' },
   { module: 'Authentication', method: 'POST', endpoint: '/api/auth/forgot-password', roles: ['Public'], description: 'Generate time-limited password reset token' },
@@ -234,29 +210,7 @@ export const API_CONTRACTS: ApiContractItem[] = [
   { module: 'WhatsApp', method: 'POST', endpoint: '/api/webhooks/whatsapp', roles: ['Meta Webhook'], description: 'Ingest incoming customer messages and delivery/read status events' }
 ];
 
-export interface SampleSimulationScenario {
-  id: string;
-  label: string;
-  language: string;
-  customerMessage: string;
-  customerName: string;
-  phone: string;
-  aiOutput: {
-    reply: string;
-    intent: string;
-    service: string;
-    leadType: 'HOT' | 'WARM' | 'COLD' | 'UNQUALIFIED';
-    leadScore: number;
-    budget: string;
-    timeline: string;
-    requirements: string[];
-    summary: string;
-    needsHuman: boolean;
-    confidence: number;
-  };
-}
-
-export const SAMPLE_SIMULATIONS: SampleSimulationScenario[] = [
+export const SAMPLE_SIMULATIONS = [
   {
     id: 'manglish-hot',
     label: 'Manglish E-Commerce Enquiry (Hot Lead)',

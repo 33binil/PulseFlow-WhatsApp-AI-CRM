@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Search, Plus, Trash2, ArrowLeft, MessageSquare, X } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
-export const ContactsListPage: React.FC = () => {
+export const ContactsListPage = () => {
   const { contacts, addContact, deleteContact } = useCRM();
   const navigate = useNavigate();
 
@@ -41,7 +41,7 @@ export const ContactsListPage: React.FC = () => {
     });
   }, [contacts, sourceFilter, search]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = (e) => {
     e.preventDefault();
     addContact({
       name,
@@ -269,8 +269,8 @@ export const ContactsListPage: React.FC = () => {
   );
 };
 
-export const ContactDetailsPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+export const ContactDetailsPage = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const { contacts, leads, conversations, updateContact, addContactNote } = useCRM();
 

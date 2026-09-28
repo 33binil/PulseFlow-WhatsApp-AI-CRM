@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   BookOpen,
-  MessageSquare,
   Globe,
   ArrowUpRight,
   BrainCircuit,
@@ -15,12 +14,11 @@ import {
   ShieldAlert,
   Search,
   Check,
-  Zap,
-  BarChart3
+  Zap
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
-export const AIInsightsPage: React.FC = () => {
+export const AIInsightsPage = () => {
   const {
     leads,
     contacts,
@@ -33,9 +31,7 @@ export const AIInsightsPage: React.FC = () => {
   } = useCRM();
 
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<
-    'ALL_FINDINGS' | 'DEAL_PLAYBOOKS' | 'LANGUAGE_INSIGHTS' | 'KNOWLEDGE_GAPS'
-  >('ALL_FINDINGS');
+  const [activeTab, setActiveTab] = useState('ALL_FINDINGS');
   const [searchQuery, setSearchQuery] = useState('');
 
   const totalPipelineValue = useMemo(
@@ -82,7 +78,7 @@ export const AIInsightsPage: React.FC = () => {
     });
   }, [leads, contacts, searchQuery]);
 
-  const formatInr = (val: number) => {
+  const formatInr = (val) => {
     if (val >= 100000) {
       return `₹${(val / 100000).toFixed(2)}L`;
     }
@@ -180,7 +176,7 @@ export const AIInsightsPage: React.FC = () => {
             return (
               <button
                 key={t.id}
-                onClick={() => setActiveTab(t.id as typeof activeTab)}
+                onClick={() => setActiveTab(t.id)}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
                   active
                     ? 'bg-slate-900 text-white shadow-2xs'

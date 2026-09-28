@@ -2,16 +2,15 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, CheckCircle2, KeyRound, Shield } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
-import { UserRole } from '../types/crm';
 
-export const LoginPage: React.FC = () => {
+export const LoginPage = () => {
   const { loginAsRole, teamMembers } = useCRM();
   const navigate = useNavigate();
   const [email, setEmail] = useState('arjun@TechnovaSolutions.in');
   const [password, setPassword] = useState('••••••••••••');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!email.includes('@') || password.length < 4) {
       setError('Please enter a valid corporate email and password.');
@@ -22,7 +21,7 @@ export const LoginPage: React.FC = () => {
     navigate('/dashboard');
   };
 
-  const handleQuickRoleLogin = (role: UserRole) => {
+  const handleQuickRoleLogin = (role) => {
     loginAsRole(role);
     navigate('/dashboard');
   };
@@ -135,11 +134,11 @@ export const LoginPage: React.FC = () => {
   );
 };
 
-export const ForgotPasswordPage: React.FC = () => {
+export const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('arjun@TechnovaSolutions.in');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitted(true);
   };
@@ -210,14 +209,14 @@ export const ForgotPasswordPage: React.FC = () => {
   );
 };
 
-export const ResetPasswordPage: React.FC = () => {
+export const ResetPasswordPage = () => {
   const navigate = useNavigate();
   const { pushToast } = useCRM();
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [error, setError] = useState('');
 
-  const handleReset = (e: React.FormEvent) => {
+  const handleReset = (e) => {
     e.preventDefault();
     if (newPass.length < 6) {
       setError('Password must be at least 6 characters.');

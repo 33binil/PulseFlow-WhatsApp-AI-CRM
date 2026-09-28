@@ -20,9 +20,8 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
-import { LeadStatus, LeadType } from '../types/crm';
 
-export const WhatsAppInboxPage: React.FC = () => {
+export const WhatsAppInboxPage = () => {
   const {
     conversations,
     contacts,
@@ -43,18 +42,18 @@ export const WhatsAppInboxPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialConvId = searchParams.get('convId') || conversations[0]?.id || 'conv-1';
 
-  const [selectedConvId, setSelectedConvId] = useState<string>(initialConvId);
-  const [inboxFilter, setInboxFilter] = useState<'ALL' | 'UNREAD' | 'HUMAN' | 'HOT'>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [replyText, setReplyText] = useState<string>('');
-  const [inspectedMsgId, setInspectedMsgId] = useState<string | null>(null);
-  const [showSimBar, setShowSimBar] = useState<boolean>(false);
-  const [customSimText, setCustomSimText] = useState<string>('');
-  const [noteInput, setNoteInput] = useState<string>('');
-  const [followUpDate, setFollowUpDate] = useState<string>('2026-09-29');
-  const [followUpTime, setFollowUpTime] = useState<string>('11:30');
-  const [followUpNote, setFollowUpNote] = useState<string>('');
-  const [showFollowUpModal, setShowFollowUpModal] = useState<boolean>(false);
+  const [selectedConvId, setSelectedConvId] = useState(initialConvId);
+  const [inboxFilter, setInboxFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [inspectedMsgId, setInspectedMsgId] = useState(null);
+  const [showSimBar, setShowSimBar] = useState(false);
+  const [customSimText, setCustomSimText] = useState('');
+  const [noteInput, setNoteInput] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('2026-09-29');
+  const [followUpTime, setFollowUpTime] = useState('11:30');
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
 
   useEffect(() => {
     const paramId = searchParams.get('convId');
@@ -64,7 +63,7 @@ export const WhatsAppInboxPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleSelectConversation = (convId: string) => {
+  const handleSelectConversation = (convId) => {
     setSelectedConvId(convId);
     setSearchParams({ convId });
     markConversationRead(convId);
@@ -107,7 +106,7 @@ export const WhatsAppInboxPage: React.FC = () => {
     [messagesByConv, activeItem]
   );
 
-  const handleSendReply = (e: React.FormEvent) => {
+  const handleSendReply = (e) => {
     e.preventDefault();
     if (!replyText.trim() || !activeItem) return;
     sendAgentMessage(activeItem.conv.id, replyText);
@@ -123,7 +122,7 @@ export const WhatsAppInboxPage: React.FC = () => {
     pushToast('Document Dispatched via WhatsApp API', 'Quotation PDF sent to customer.', 'success');
   };
 
-  const handleAddQuickFollowUp = (e: React.FormEvent) => {
+  const handleAddQuickFollowUp = (e) => {
     e.preventDefault();
     if (!activeItem?.lead || !activeItem?.contact) return;
     addFollowUp({
@@ -170,7 +169,7 @@ export const WhatsAppInboxPage: React.FC = () => {
 
           {/* Functional Filter Tabs */}
           <div className="grid grid-cols-4 gap-1 bg-slate-200/70 p-1 rounded-lg">
-            {(['ALL', 'UNREAD', 'HUMAN', 'HOT'] as const).map((tab) => (
+            {['ALL', 'UNREAD', 'HUMAN', 'HOT'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setInboxFilter(tab)}
@@ -733,7 +732,7 @@ export const WhatsAppInboxPage: React.FC = () => {
                 <select
                   value={lead.leadType}
                   onChange={(e) =>
-                    updateLead(lead.id, { leadType: e.target.value as LeadType })
+                    updateLead(lead.id, { leadType: e.target.value })
                   }
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
                 >
@@ -750,7 +749,7 @@ export const WhatsAppInboxPage: React.FC = () => {
                 <select
                   value={lead.leadStatus}
                   onChange={(e) =>
-                    updateLead(lead.id, { leadStatus: e.target.value as LeadStatus })
+                    updateLead(lead.id, { leadStatus: e.target.value })
                   }
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
                 >

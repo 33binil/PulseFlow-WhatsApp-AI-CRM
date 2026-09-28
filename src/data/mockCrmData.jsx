@@ -1,20 +1,4 @@
-import {
-  TeamMember,
-  Contact,
-  Lead,
-  Conversation,
-  Message,
-  FollowUp,
-  KnowledgeArticle,
-  KnowledgeGapFinding,
-  StrategicFinding,
-  AISettingsConfig,
-  WhatsAppSettingsConfig,
-  CompanySettingsConfig,
-  CRMNotification
-} from '../types/crm';
-
-export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
+export const INITIAL_TEAM_MEMBERS = [
   {
     id: 'usr-1',
     name: 'Arjun Nair',
@@ -69,7 +53,7 @@ export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
   }
 ];
 
-export const INITIAL_CONTACTS: Contact[] = [
+export const INITIAL_CONTACTS = [
   {
     id: 'cnt-1',
     name: 'Rahul Menon',
@@ -237,7 +221,7 @@ export const INITIAL_CONTACTS: Contact[] = [
   }
 ];
 
-export const INITIAL_LEADS: Lead[] = [
+export const INITIAL_LEADS = [
   {
     id: 'ld-1',
     contactId: 'cnt-1',
@@ -582,7 +566,7 @@ export const INITIAL_LEADS: Lead[] = [
   }
 ];
 
-export const INITIAL_CONVERSATIONS: Conversation[] = [
+export const INITIAL_CONVERSATIONS = [
   {
     id: 'conv-1',
     contactId: 'cnt-1',
@@ -701,7 +685,7 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
   }
 ];
 
-export const INITIAL_MESSAGES: Record<string, Message[]> = {
+export const INITIAL_MESSAGES = {
   'conv-1': [
     {
       id: 'msg-101',
@@ -899,7 +883,7 @@ export const INITIAL_MESSAGES: Record<string, Message[]> = {
   ]
 };
 
-export const INITIAL_FOLLOW_UPS: FollowUp[] = [
+export const INITIAL_FOLLOW_UPS = [
   {
     id: 'fu-1',
     leadId: 'ld-2',
@@ -962,7 +946,7 @@ export const INITIAL_FOLLOW_UPS: FollowUp[] = [
   }
 ];
 
-export const INITIAL_KNOWLEDGE_BASE: KnowledgeArticle[] = [
+export const INITIAL_KNOWLEDGE_BASE = [
   {
     id: 'kb-1',
     category: 'COMPANY_INFO',
@@ -1031,7 +1015,7 @@ export const INITIAL_KNOWLEDGE_BASE: KnowledgeArticle[] = [
   }
 ];
 
-export const INITIAL_KNOWLEDGE_GAPS: KnowledgeGapFinding[] = [
+export const INITIAL_KNOWLEDGE_GAPS = [
   {
     id: 'gap-1',
     questionAsked: 'Boutique store-nu ₹60k-₹65k budget-il Shopify + WhatsApp Catalog order booking package undo?',
@@ -1070,7 +1054,7 @@ export const INITIAL_KNOWLEDGE_GAPS: KnowledgeGapFinding[] = [
   }
 ];
 
-export const INITIAL_STRATEGIC_FINDINGS: StrategicFinding[] = [
+export const INITIAL_STRATEGIC_FINDINGS = [
   {
     id: 'sf-1',
     category: 'REVENUE_SIGNAL',
@@ -1125,7 +1109,7 @@ export const INITIAL_STRATEGIC_FINDINGS: StrategicFinding[] = [
   }
 ];
 
-export const INITIAL_AI_SETTINGS: AISettingsConfig = {
+export const INITIAL_AI_SETTINGS = {
   aiEnabled: true,
   autoReplyEnabled: true,
   provider: 'OPENAI',
@@ -1154,7 +1138,7 @@ Your responsibilities:
 - Detect when human assistance is required and set needsHuman = true for complaints, refund issues, manager requests, or complex custom enterprise quotes.`
 };
 
-export const INITIAL_WHATSAPP_SETTINGS: WhatsAppSettingsConfig = {
+export const INITIAL_WHATSAPP_SETTINGS = {
   phoneNumberId: '109283746512345',
   businessAccountId: '987654321098765',
   displayPhoneNumber: '+91 98470 00999',
@@ -1166,7 +1150,7 @@ export const INITIAL_WHATSAPP_SETTINGS: WhatsAppSettingsConfig = {
   n8nWebhookUrl: 'https://n8n.pulseflow-crm.in/webhook/whatsapp-crm-events'
 };
 
-export const INITIAL_COMPANY_SETTINGS: CompanySettingsConfig = {
+export const INITIAL_COMPANY_SETTINGS = {
   name: 'TechNova Digital Solutions Pvt Ltd',
   industry: 'IT Services, Web & Mobile Engineering',
   email: 'hello@TechnovaSolutions.in',
@@ -1186,7 +1170,7 @@ export const INITIAL_COMPANY_SETTINGS: CompanySettingsConfig = {
   ]
 };
 
-export const INITIAL_NOTIFICATIONS: CRMNotification[] = [
+export const INITIAL_NOTIFICATIONS = [
   {
     id: 'notif-1',
     type: 'HUMAN_ATTENTION',

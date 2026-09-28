@@ -21,13 +21,12 @@ import {
   Tooltip
 } from 'recharts';
 import { useCRM } from '../context/CRMContext';
-import { FollowUpStatus } from '../types/crm';
 import {
   ANALYTICS_LEADS_OVER_TIME,
   ANALYTICS_LEAD_SOURCES
 } from '../data/mockCrmData';
 
-export const FollowUpsPage: React.FC = () => {
+export const FollowUpsPage = () => {
   const {
     followUps,
     leads,
@@ -39,7 +38,7 @@ export const FollowUpsPage: React.FC = () => {
     deleteFollowUp
   } = useCRM();
 
-  const [statusFilter, setStatusFilter] = useState<'ALL' | FollowUpStatus>('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
   const [leadId, setLeadId] = useState(leads[0]?.id || 'ld-1');
   const [assignedId, setAssignedId] = useState(currentUser.id);
@@ -58,7 +57,7 @@ export const FollowUpsPage: React.FC = () => {
       .filter(({ fu }) => (statusFilter === 'ALL' ? true : fu.status === statusFilter));
   }, [followUps, leads, contacts, teamMembers, statusFilter]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = (e) => {
     e.preventDefault();
     const targetLead = leads.find((l) => l.id === leadId) || leads[0];
     if (!targetLead) return;
@@ -95,7 +94,7 @@ export const FollowUpsPage: React.FC = () => {
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
         <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg w-fit">
-          {(['ALL', 'PENDING', 'OVERDUE', 'COMPLETED', 'CANCELLED'] as const).map((st) => (
+          {['ALL', 'PENDING', 'OVERDUE', 'COMPLETED', 'CANCELLED'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
@@ -286,9 +285,9 @@ export const FollowUpsPage: React.FC = () => {
   );
 };
 
-export const AnalyticsPage: React.FC = () => {
+export const AnalyticsPage = () => {
   const { leads, conversations, teamMembers } = useCRM();
-  const [timeframe, setTimeframe] = useState<'7D' | '30D' | '90D'>('30D');
+  const [timeframe, setTimeframe] = useState('30D');
 
   const intentBreakdown = [
     { intent: 'pricing_enquiry', count: 68, avgScore: 82 },
@@ -312,7 +311,7 @@ export const AnalyticsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-lg self-start">
-          {(['7D', '30D', '90D'] as const).map((tf) => (
+          {['7D', '30D', '90D'].map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}

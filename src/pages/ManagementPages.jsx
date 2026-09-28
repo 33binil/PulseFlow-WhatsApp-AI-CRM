@@ -9,7 +9,6 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
-import { KnowledgeCategory, UserRole } from '../types/crm';
 import {
   ARCHITECTURE_SECTIONS,
   MONGOOSE_MODELS,
@@ -18,15 +17,15 @@ import {
 } from '../data/architectureBlueprint';
 
 /* 1. TEAM MEMBERS PAGE */
-export const TeamMembersPage: React.FC = () => {
+export const TeamMembersPage = () => {
   const { teamMembers, currentUser, addTeamMember, updateTeamMember, deleteTeamMember } = useCRM();
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+91 98470 ');
-  const [role, setRole] = useState<UserRole>('AGENT');
+  const [role, setRole] = useState('AGENT');
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = (e) => {
     e.preventDefault();
     addTeamMember({ name, email, phone, role, isActive: true });
     setShowModal(false);
@@ -79,7 +78,7 @@ export const TeamMembersPage: React.FC = () => {
                     <select
                       value={tm.role}
                       onChange={(e) =>
-                        updateTeamMember(tm.id, { role: e.target.value as UserRole })
+                        updateTeamMember(tm.id, { role: e.target.value })
                       }
                       className="px-2 py-1 border border-slate-200 rounded bg-white font-mono text-xs"
                     >
@@ -171,7 +170,7 @@ export const TeamMembersPage: React.FC = () => {
                   <label className="block font-semibold text-slate-700 mb-1">Role</label>
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    onChange={(e) => setRole(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                   >
                     <option value="ADMIN">ADMIN</option>
@@ -204,11 +203,11 @@ export const TeamMembersPage: React.FC = () => {
 };
 
 /* 2. AI SETTINGS PAGE */
-export const AISettingsPage: React.FC = () => {
+export const AISettingsPage = () => {
   const { aiSettings, updateAISettings } = useCRM();
   const [formState, setFormState] = useState(aiSettings);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = (e) => {
     e.preventDefault();
     updateAISettings(formState);
   };
@@ -271,7 +270,7 @@ export const AISettingsPage: React.FC = () => {
               <select
                 value={formState.provider}
                 onChange={(e) =>
-                  setFormState({ ...formState, provider: e.target.value as 'OPENAI' | 'GEMINI' })
+                  setFormState({ ...formState, provider: e.target.value })
                 }
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
               >
@@ -333,7 +332,7 @@ export const AISettingsPage: React.FC = () => {
                 onChange={(e) =>
                   setFormState({
                     ...formState,
-                    businessTone: e.target.value as typeof formState.businessTone
+                    businessTone: e.target.value
                   })
                 }
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
@@ -353,7 +352,7 @@ export const AISettingsPage: React.FC = () => {
                 onChange={(e) =>
                   setFormState({
                     ...formState,
-                    responseLanguage: e.target.value as typeof formState.responseLanguage
+                    responseLanguage: e.target.value
                   })
                 }
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
@@ -487,7 +486,7 @@ export const AISettingsPage: React.FC = () => {
 };
 
 /* 3. KNOWLEDGE BASE PAGE */
-export const KnowledgeBasePage: React.FC = () => {
+export const KnowledgeBasePage = () => {
   const {
     knowledgeBase,
     currentUser,
@@ -496,14 +495,14 @@ export const KnowledgeBasePage: React.FC = () => {
     deleteKnowledgeArticle
   } = useCRM();
 
-  const [catFilter, setCatFilter] = useState<string>('ALL');
+  const [catFilter, setCatFilter] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
-  const [category, setCategory] = useState<KnowledgeCategory>('SERVICES');
+  const [category, setCategory] = useState('SERVICES');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [keywords, setKeywords] = useState('');
 
-  const categories: KnowledgeCategory[] = [
+  const categories = [
     'COMPANY_INFO',
     'SERVICES',
     'PRICING',
@@ -520,7 +519,7 @@ export const KnowledgeBasePage: React.FC = () => {
     catFilter === 'ALL' ? true : k.category === catFilter
   );
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = (e) => {
     e.preventDefault();
     addKnowledgeArticle({
       category,
@@ -642,7 +641,7 @@ export const KnowledgeBasePage: React.FC = () => {
                 <label className="block font-semibold text-slate-700 mb-1">Category</label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
+                  onChange={(e) => setCategory(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                 >
                   {categories.map((c) => (
@@ -712,12 +711,12 @@ export const KnowledgeBasePage: React.FC = () => {
 };
 
 /* 4. WHATSAPP SETTINGS PAGE */
-export const WhatsAppSettingsPage: React.FC = () => {
+export const WhatsAppSettingsPage = () => {
   const { whatsappSettings, updateWhatsAppSettings } = useCRM();
   const [form, setForm] = useState(whatsappSettings);
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
@@ -856,7 +855,7 @@ export const WhatsAppSettingsPage: React.FC = () => {
 };
 
 /* 5. COMPANY SETTINGS PAGE */
-export const CompanySettingsPage: React.FC = () => {
+export const CompanySettingsPage = () => {
   const { companySettings, updateCompanySettings } = useCRM();
   const [form, setForm] = useState(companySettings);
 
@@ -975,7 +974,7 @@ export const CompanySettingsPage: React.FC = () => {
 };
 
 /* 6. PROFILE & GENERAL SETTINGS PAGE */
-export const ProfileSettingsPage: React.FC<{ mode: 'profile' | 'general' }> = ({ mode }) => {
+export const ProfileSettingsPage = ({ mode }) => {
   const { currentUser, updateTeamMember, pushToast } = useCRM();
   const [name, setName] = useState(currentUser.name);
   const [phone, setPhone] = useState(currentUser.phone);
@@ -1087,7 +1086,7 @@ export const ProfileSettingsPage: React.FC<{ mode: 'profile' | 'general' }> = ({
 };
 
 /* 7. PHASE 1 ARCHITECTURE BLUEPRINT REFERENCE PAGE */
-export const ArchitectureBlueprintPage: React.FC = () => {
+export const ArchitectureBlueprintPage = () => {
   const [selectedModel, setSelectedModel] = useState(MONGOOSE_MODELS[0]);
 
   return (

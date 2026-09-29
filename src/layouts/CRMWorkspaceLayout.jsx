@@ -232,51 +232,46 @@ export const CRMWorkspaceLayout = ({ children }) => {
         <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-600">
           <Link
             to="/dashboard"
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${
-              isPathActive('/dashboard')
+            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${isPathActive('/dashboard')
                 ? 'text-slate-900 font-semibold underline underline-offset-4 decoration-emerald-600 decoration-2'
                 : ''
-            }`}
+              }`}
           >
             Home
           </Link>
           <Link
             to="/inbox"
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${
-              isPathActive('/inbox')
+            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${isPathActive('/inbox')
                 ? 'text-slate-900 font-semibold underline underline-offset-4 decoration-emerald-600 decoration-2'
                 : ''
-            }`}
+              }`}
           >
             WhatsApp Inbox
           </Link>
           <Link
             to="/insights"
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${
-              isPathActive('/insights')
+            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${isPathActive('/insights')
                 ? 'text-slate-900 font-semibold underline underline-offset-4 decoration-emerald-600 decoration-2'
                 : ''
-            }`}
+              }`}
           >
             What AI Knows
           </Link>
           <Link
             to="/leads"
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${
-              isPathActive('/leads')
+            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${isPathActive('/leads')
                 ? 'text-slate-900 font-semibold underline underline-offset-4 decoration-emerald-600 decoration-2'
                 : ''
-            }`}
+              }`}
           >
             Sales Leads
           </Link>
           <Link
             to="/knowledge-base"
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${
-              isPathActive('/knowledge-base')
+            className={`hover:text-slate-900 transition-colors whitespace-nowrap ${isPathActive('/knowledge-base')
                 ? 'text-slate-900 font-semibold underline underline-offset-4 decoration-emerald-600 decoration-2'
                 : ''
-            }`}
+              }`}
           >
             AI Answers (KB)
           </Link>
@@ -337,19 +332,17 @@ export const CRMWorkspaceLayout = ({ children }) => {
                         setNotifOpen(false);
                         navigate(n.linkTo);
                       }}
-                      className={`py-2.5 px-2.5 cursor-pointer rounded-lg hover:bg-slate-50 transition-colors ${
-                        !n.isRead ? 'bg-emerald-50/40' : ''
-                      }`}
+                      className={`py-2.5 px-2.5 cursor-pointer rounded-lg hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-emerald-50/40' : ''
+                        }`}
                     >
                       <div className="flex items-center justify-between text-[11px] text-slate-500">
                         <span
-                          className={`font-semibold ${
-                            n.type === 'HUMAN_ATTENTION' || n.type === 'AI_ESCALATION'
+                          className={`font-semibold ${n.type === 'HUMAN_ATTENTION' || n.type === 'AI_ESCALATION'
                               ? 'text-rose-700'
                               : n.type === 'HOT_LEAD'
-                              ? 'text-emerald-700'
-                              : 'text-slate-800'
-                          }`}
+                                ? 'text-emerald-700'
+                                : 'text-slate-800'
+                            }`}
                         >
                           {n.title}
                         </span>
@@ -376,9 +369,8 @@ export const CRMWorkspaceLayout = ({ children }) => {
       <div className="flex-1 flex relative min-h-0 overflow-hidden">
         {/* Clean, Friendly & Self-Explanatory Sidebar Navigation */}
         <aside
-          className={`${
-            mobileMenuOpen ? 'fixed inset-y-0 left-0 z-40 w-64 shadow-2xl' : 'hidden'
-          } lg:static lg:block lg:w-64 bg-white border-r border-slate-200 shrink-0 flex flex-col justify-between p-4 h-full min-h-0 overflow-y-auto overscroll-contain`}
+          className={`${mobileMenuOpen ? 'fixed inset-y-0 left-0 z-40 w-64 shadow-2xl' : 'hidden'
+            } lg:static lg:block lg:w-64 bg-white border-r border-slate-200 shrink-0 flex flex-col justify-between p-4 h-full min-h-0 overflow-y-auto overscroll-contain`}
         >
           <div className="space-y-6">
             {/* Simple Daily Menu */}
@@ -395,30 +387,27 @@ export const CRMWorkspaceLayout = ({ children }) => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
-                        active
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${active
                           ? 'bg-slate-900 text-white shadow-2xs'
                           : item.highlight
-                          ? 'bg-emerald-50/70 text-slate-900 hover:bg-emerald-100/70'
-                          : 'text-slate-700 hover:bg-slate-100'
-                      }`}
+                            ? 'bg-emerald-50/70 text-slate-900 hover:bg-emerald-100/70'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <div className="flex items-start gap-3 min-w-0">
                         <Icon
-                          className={`w-4 h-4 shrink-0 mt-0.5 ${
-                            active
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${active
                               ? 'text-emerald-400'
                               : item.highlight
-                              ? 'text-emerald-600'
-                              : 'text-slate-500'
-                          }`}
+                                ? 'text-emerald-600'
+                                : 'text-slate-500'
+                            }`}
                         />
                         <div className="min-w-0">
                           <div className="text-xs font-semibold truncate">{item.label}</div>
                           <div
-                            className={`text-[11px] truncate ${
-                              active ? 'text-slate-300' : 'text-slate-500'
-                            }`}
+                            className={`text-[11px] truncate ${active ? 'text-slate-300' : 'text-slate-500'
+                              }`}
                           >
                             {item.subtitle}
                           </div>
@@ -433,9 +422,8 @@ export const CRMWorkspaceLayout = ({ children }) => {
                         )}
                         {item.counter !== undefined && (
                           <span
-                            className={`text-[11px] font-semibold ${
-                              active ? 'text-emerald-300' : 'text-emerald-700'
-                            }`}
+                            className={`text-[11px] font-semibold ${active ? 'text-emerald-300' : 'text-emerald-700'
+                              }`}
                           >
                             {item.counter}
                           </span>
@@ -476,11 +464,10 @@ export const CRMWorkspaceLayout = ({ children }) => {
                         key={item.path}
                         to={item.path}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors ${
-                          active
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors ${active
                             ? 'bg-slate-900 text-white font-semibold'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
+                          }`}
                       >
                         <Icon className="w-4 h-4 shrink-0 text-slate-400" />
                         <div className="truncate">
@@ -520,11 +507,10 @@ export const CRMWorkspaceLayout = ({ children }) => {
                   <button
                     key={role}
                     onClick={() => switchRole(role)}
-                    className={`py-1 text-[10px] font-semibold rounded-md transition-colors cursor-pointer ${
-                      currentUser.role === role
+                    className={`py-1 text-[10px] font-semibold rounded-md transition-colors cursor-pointer ${currentUser.role === role
                         ? 'bg-white text-slate-900 shadow-2xs'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     {role}
                   </button>

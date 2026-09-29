@@ -205,11 +205,11 @@ export const CRMProvider = ({ children }) => {
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              aiEnabled: false,
-              needsHumanAttention: false,
-              status: 'HUMAN_HANDOFF'
-            }
+            ...c,
+            aiEnabled: false,
+            needsHumanAttention: false,
+            status: 'HUMAN_HANDOFF'
+          }
           : c
       )
     );
@@ -235,12 +235,12 @@ export const CRMProvider = ({ children }) => {
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              aiEnabled: true,
-              needsHumanAttention: false,
-              handoffReason: undefined,
-              status: 'OPEN'
-            }
+            ...c,
+            aiEnabled: true,
+            needsHumanAttention: false,
+            handoffReason: undefined,
+            status: 'OPEN'
+          }
           : c
       )
     );
@@ -282,12 +282,12 @@ export const CRMProvider = ({ children }) => {
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              lastMessage: content.trim(),
-              lastMessageTime: nowStr,
-              unreadCount: 0,
-              needsHumanAttention: false
-            }
+            ...c,
+            lastMessage: content.trim(),
+            lastMessageTime: nowStr,
+            unreadCount: 0,
+            needsHumanAttention: false
+          }
           : c
       )
     );
@@ -329,11 +329,11 @@ export const CRMProvider = ({ children }) => {
         prev.map((c) =>
           c.id === conversationId
             ? {
-                ...c,
-                lastMessage: content.trim(),
-                lastMessageTime: nowStr,
-                unreadCount: c.unreadCount + 1
-              }
+              ...c,
+              lastMessage: content.trim(),
+              lastMessageTime: nowStr,
+              unreadCount: c.unreadCount + 1
+            }
             : c
         )
       );
@@ -400,9 +400,8 @@ export const CRMProvider = ({ children }) => {
       };
     } else {
       aiStructured = {
-        reply: `Thank you for your message, ${
-          contact?.name?.split(' ')[0] || 'there'
-        }! Based on our company pricing knowledge base, we can deliver your project with a 40/40/20 milestone structure and 90-day warranty. Would you like us to share a formal quotation PDF for your budget and timeline?`,
+        reply: `Thank you for your message, ${contact?.name?.split(' ')[0] || 'there'
+          }! Based on our company pricing knowledge base, we can deliver your project with a 40/40/20 milestone structure and 90-day warranty. Would you like us to share a formal quotation PDF for your budget and timeline?`,
         intent: 'request_for_quotation',
         service: lead?.interestedService || 'web_development',
         leadType: 'HOT',
@@ -437,17 +436,17 @@ export const CRMProvider = ({ children }) => {
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              lastMessage: aiStructured.reply,
-              lastMessageTime: nowStr,
-              aiEnabled: !aiStructured.needsHuman,
-              needsHumanAttention: aiStructured.needsHuman,
-              status: aiStructured.needsHuman ? 'HUMAN_HANDOFF' : 'OPEN',
-              keyFinding: aiStructured.summary,
-              handoffReason: aiStructured.needsHuman
-                ? 'Customer requested human/manager intervention'
-                : undefined
-            }
+            ...c,
+            lastMessage: aiStructured.reply,
+            lastMessageTime: nowStr,
+            aiEnabled: !aiStructured.needsHuman,
+            needsHumanAttention: aiStructured.needsHuman,
+            status: aiStructured.needsHuman ? 'HUMAN_HANDOFF' : 'OPEN',
+            keyFinding: aiStructured.summary,
+            handoffReason: aiStructured.needsHuman
+              ? 'Customer requested human/manager intervention'
+              : undefined
+          }
           : c
       )
     );
@@ -457,21 +456,21 @@ export const CRMProvider = ({ children }) => {
         prev.map((l) =>
           l.id === lead.id
             ? {
-                ...l,
-                leadScore: aiStructured.leadScore,
-                leadType: aiStructured.leadType,
-                budget: aiStructured.budget,
-                timeline: aiStructured.timeline,
-                requirements: aiStructured.requirements,
-                buyingSignals: Array.from(
-                  new Set([
-                    ...l.buyingSignals,
-                    `Latest AI Intent: ${aiStructured.intent} (${Math.round(aiStructured.confidence * 100)}% confidence)`
-                  ])
-                ),
-                aiSummary: aiStructured.summary,
-                lastInteractionAt: 'Just now'
-              }
+              ...l,
+              leadScore: aiStructured.leadScore,
+              leadType: aiStructured.leadType,
+              budget: aiStructured.budget,
+              timeline: aiStructured.timeline,
+              requirements: aiStructured.requirements,
+              buyingSignals: Array.from(
+                new Set([
+                  ...l.buyingSignals,
+                  `Latest AI Intent: ${aiStructured.intent} (${Math.round(aiStructured.confidence * 100)}% confidence)`
+                ])
+              ),
+              aiSummary: aiStructured.summary,
+              lastInteractionAt: 'Just now'
+            }
             : l
         )
       );

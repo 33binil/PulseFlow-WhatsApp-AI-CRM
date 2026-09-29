@@ -12,12 +12,13 @@ import {
   Sparkles,
   CalendarPlus,
   ExternalLink,
-  Code2,
   X,
   TrendingUp,
   ShieldAlert,
-  Zap,
-  Lightbulb
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
@@ -48,6 +49,7 @@ export const WhatsAppInboxPage = () => {
   const [replyText, setReplyText] = useState('');
   const [inspectedMsgId, setInspectedMsgId] = useState(null);
   const [showSimBar, setShowSimBar] = useState(false);
+  const [showScoreDetails, setShowScoreDetails] = useState(false);
   const [customSimText, setCustomSimText] = useState('');
   const [noteInput, setNoteInput] = useState('');
   const [followUpDate, setFollowUpDate] = useState('2026-09-29');
@@ -119,7 +121,7 @@ export const WhatsAppInboxPage = () => {
       activeItem.conv.id,
       'Shared attachment: TechNova_Service_Quotation_2026.pdf (420 KB)'
     );
-    pushToast('Document Dispatched via WhatsApp API', 'Quotation PDF sent to customer.', 'success');
+    pushToast('Quotation Sent', 'PDF quotation sent to customer on WhatsApp.', 'success');
   };
 
   const handleAddQuickFollowUp = (e) => {
@@ -131,7 +133,9 @@ export const WhatsAppInboxPage = () => {
       assignedUserId: activeItem.lead.assignedAgentId,
       date: followUpDate,
       time: followUpTime,
-      note: followUpNote || `Follow up with ${activeItem.contact.name} regarding ${activeItem.lead.interestedService}`,
+      note:
+        followUpNote ||
+        `Follow up with ${activeItem.contact.name} regarding ${activeItem.lead.interestedService}`,
       status: 'PENDING'
     });
     setFollowUpNote('');
@@ -146,13 +150,16 @@ export const WhatsAppInboxPage = () => {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col lg:flex-row bg-white overflow-hidden">
-      {/* LEFT PANE: CONVERSATION LIST */}
+      {/* LEFT PANE: SIMPLE CUSTOMER LIST */}
       <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col shrink-0 h-64 lg:h-full">
         <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
           <div className="flex items-center justify-between">
-            <h1 className="text-sm font-bold text-slate-900">WhatsApp CRM Inbox</h1>
+            <div>
+              <h1 className="text-sm font-bold text-slate-900">WhatsApp Chats</h1>
+              <p className="text-[11px] text-slate-500">Click a customer to read or reply</p>
+            </div>
             <span className="text-xs font-mono text-slate-500 tabular-nums">
-              {filteredList.length} active threads
+              {filteredList.length} chats
             </span>
           </div>
 
@@ -162,24 +169,29 @@ export const WhatsAppInboxPage = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name, +91 phone, message..."
+              placeholder="Search customer name or phone..."
               className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
             />
           </div>
 
-          {/* Functional Filter Tabs */}
+          {/* Easy-to-Understand Filter Tabs */}
           <div className="grid grid-cols-4 gap-1 bg-slate-200/70 p-1 rounded-lg">
-            {['ALL', 'UNREAD', 'HUMAN', 'HOT'].map((tab) => (
+            {[
+              { id: 'ALL', label: 'All' },
+              { id: 'HUMAN', label: 'Needs You' },
+              { id: 'HOT', label: 'Hot Leads' },
+              { id: 'UNREAD', label: 'Unread' }
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setInboxFilter(tab)}
+                key={tab.id}
+                onClick={() => setInboxFilter(tab.id)}
                 className={`py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                  inboxFilter === tab
+                  inboxFilter === tab.id
                     ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {tab === 'HUMAN' ? 'Escalated' : tab}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -206,7 +218,6 @@ export const WhatsAppInboxPage = () => {
                     : 'hover:bg-slate-50'
                 }`}
               >
-                {/* Profile Avatar */}
                 <div
                   className={`w-9 h-9 rounded-lg font-mono text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
                     isSelected ? 'bg-emerald-700 text-white' : 'bg-slate-900 text-white'
@@ -225,19 +236,11 @@ export const WhatsAppInboxPage = () => {
                     </span>
                   </div>
 
-                  <div className="text-[11px] font-mono text-slate-500 mt-0.5 tabular-nums flex items-center gap-1.5">
-                    <span>{itemContact?.phone}</span>
-                    <span>·</span>
-                    <span className="text-indigo-700 font-sans font-medium">
-                      {itemConv.language}
-                    </span>
-                  </div>
-
                   <p className="text-xs text-slate-600 truncate mt-1">
                     {itemConv.lastMessage}
                   </p>
 
-                  {/* Zero-Pill Metadata Line: Status · Score · Attention · Unread */}
+                  {/* Simple Unboxed Metadata Line */}
                   <div className="flex items-center justify-between gap-2 mt-1.5 text-[11px]">
                     <div className="flex items-center gap-1.5 text-slate-500 truncate">
                       <span
@@ -252,18 +255,16 @@ export const WhatsAppInboxPage = () => {
                         {itemLead?.leadType || 'LEAD'}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                        Score {itemLead?.leadScore ?? 0}
-                      </span>
-                      <span aria-hidden="true">·</span>
                       <span className="font-mono text-slate-700">{itemLead?.budget}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-indigo-700 font-medium">{itemConv.language}</span>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       {itemConv.needsHumanAttention && (
                         <span className="text-rose-700 font-semibold flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
-                          <span>Human</span>
+                          <span>Needs You</span>
                         </span>
                       )}
                       {itemConv.unreadCount > 0 && (
@@ -280,7 +281,7 @@ export const WhatsAppInboxPage = () => {
         </div>
       </div>
 
-      {/* CENTER PANE: CHAT INTERFACE */}
+      {/* CENTER PANE: EASY WHATSAPP CHAT WINDOW */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#F4F6F9] h-full">
         {/* Chat Header */}
         <div className="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -292,101 +293,96 @@ export const WhatsAppInboxPage = () => {
                 {contact?.phone}
               </span>
               <span aria-hidden="true" className="text-slate-300">·</span>
-              <span className="text-xs font-semibold text-indigo-700">{conv.language}</span>
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
-              <span>
-                {contact?.company} ({contact?.roleTitle || 'Decision Maker'})
+              <span className="text-xs font-semibold text-indigo-700">
+                Speaks {conv.language}
               </span>
-              <span aria-hidden="true">·</span>
+            </div>
+            <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
               <span
                 className={`font-semibold ${
                   conv.aiEnabled ? 'text-emerald-700' : 'text-amber-700'
                 }`}
               >
                 {conv.aiEnabled
-                  ? '● AI Auto-Reply Active'
-                  : '● Human Agent Mode (AI Paused)'}
+                  ? '● AI Assistant is replying automatically'
+                  : '● You are replying directly (AI is paused)'}
               </span>
             </div>
           </div>
 
-          {/* AI Toggle + TAKE OVER / RETURN TO AI Controls */}
+          {/* Simple Controls: Test Sample Message + Take Over / Let AI Reply */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSimBar((prev) => !prev)}
               className="px-3 py-1.5 text-xs font-semibold border border-indigo-200 rounded-lg bg-indigo-50/80 hover:bg-indigo-100 text-indigo-900 transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Simulate Customer Chat</span>
+              <span>Test Sample Customer Message</span>
             </button>
 
             {conv.aiEnabled ? (
               <button
                 onClick={() => takeOverConversation(conv.id)}
                 className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                title="Pause AI and reply yourself"
               >
                 <UserCheck className="w-3.5 h-3.5" />
-                <span>TAKE OVER</span>
+                <span>Take Over Chat</span>
               </button>
             ) : (
               <button
                 onClick={() => returnConversationToAI(conv.id)}
                 className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                title="Turn automatic AI replies back on"
               >
                 <Bot className="w-3.5 h-3.5" />
-                <span>RETURN TO AI</span>
+                <span>Let AI Reply Again</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* AI Key Finding Strip for Active Conversation */}
+        {/* One-Line Summary of What AI Knows About This Chat */}
         {conv.keyFinding && (
           <div className="bg-emerald-950 text-emerald-100 px-4 py-2 border-b border-emerald-900 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 truncate">
               <Lightbulb className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span className="truncate">
-                <strong className="text-white">AI Key Finding:</strong> {conv.keyFinding}
+                <strong className="text-white">What AI learned here:</strong> {conv.keyFinding}
               </span>
             </div>
-            {lead && (
-              <span className="text-[11px] font-mono text-emerald-300 shrink-0">
-                Sentiment: {lead.customerSentiment}
-              </span>
-            )}
           </div>
         )}
 
-        {/* Human Attention Escalation Banner */}
+        {/* Clear Alert When Customer Needs Human Help */}
         {conv.needsHumanAttention && (
           <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-rose-800">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>
-                <strong>Human Attention Required:</strong>{' '}
-                {conv.handoffReason || 'AI escalated this conversation for human assistance.'}
+                <strong>Customer needs you:</strong>{' '}
+                {conv.handoffReason || 'Customer asked to speak with a person.'}
               </span>
             </div>
             <button
               onClick={() => takeOverConversation(conv.id)}
               className="px-3 py-1 bg-rose-700 text-white text-xs font-semibold rounded hover:bg-rose-800 transition-colors shrink-0 cursor-pointer"
             >
-              Acknowledge & Take Over
+              Take Over Now
             </button>
           </div>
         )}
 
-        {/* Interactive Customer Message Simulator Drawer */}
+        {/* Friendly 1-Click Customer Message Tester */}
         {showSimBar && (
           <div className="bg-slate-900 text-white px-4 py-3 border-b border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-emerald-400">
-                Test Incoming WhatsApp Webhook & AI Auto-Reply Engine
+                Try sending a sample customer message to see how AI replies and updates the lead score:
               </span>
               <button
                 onClick={() => setShowSimBar(false)}
-                className="text-slate-400 hover:text-white text-xs"
+                className="text-slate-400 hover:text-white text-xs cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -401,9 +397,9 @@ export const WhatsAppInboxPage = () => {
                     'Manglish'
                   )
                 }
-                className="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition-colors cursor-pointer"
+                className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition-colors cursor-pointer"
               >
-                + Manglish Pricing & Budget
+                1. Test Manglish Budget Inquiry
               </button>
               <button
                 type="button"
@@ -414,9 +410,9 @@ export const WhatsAppInboxPage = () => {
                     'Malayalam'
                   )
                 }
-                className="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition-colors cursor-pointer"
+                className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-200 transition-colors cursor-pointer"
               >
-                + Malayalam Inquiry
+                2. Test Malayalam Inquiry
               </button>
               <button
                 type="button"
@@ -427,9 +423,9 @@ export const WhatsAppInboxPage = () => {
                     'English'
                   )
                 }
-                className="px-2.5 py-1 text-[11px] bg-rose-900/80 hover:bg-rose-800 rounded text-rose-100 transition-colors cursor-pointer"
+                className="px-2.5 py-1 text-xs bg-rose-900/80 hover:bg-rose-800 rounded text-rose-100 transition-colors cursor-pointer"
               >
-                + Trigger Human Handoff Escalation
+                3. Test "Ask for Human Manager"
               </button>
             </div>
             <form
@@ -445,14 +441,14 @@ export const WhatsAppInboxPage = () => {
                 type="text"
                 value={customSimText}
                 onChange={(e) => setCustomSimText(e.target.value)}
-                placeholder="Or type any custom customer WhatsApp message (English / Manglish / Malayalam)..."
+                placeholder="Or type any customer message here (English, Manglish, or Malayalam)..."
                 className="flex-1 px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-400 focus:outline-none focus:border-emerald-400"
               />
               <button
                 type="submit"
                 className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded whitespace-nowrap cursor-pointer"
               >
-                Simulate Inbound
+                Send as Customer
               </button>
             </form>
           </div>
@@ -489,7 +485,7 @@ export const WhatsAppInboxPage = () => {
                       : 'bg-emerald-800 border-emerald-900 text-white'
                   }`}
                 >
-                  {/* Sender Indicator Header */}
+                  {/* Clear Sender Name */}
                   <div
                     className={`flex items-center justify-between gap-4 text-[11px] mb-1 ${
                       isCustomer
@@ -503,8 +499,8 @@ export const WhatsAppInboxPage = () => {
                       {isCustomer
                         ? `${msg.senderName} (Customer)`
                         : isAI
-                        ? 'PulseFlow AI Auto-Reply'
-                        : `${msg.senderName} (Human Agent)`}
+                        ? 'AI Assistant (Auto-Reply)'
+                        : `${msg.senderName} (You)`}
                     </span>
                     {isAI && msg.aiMetadata && (
                       <button
@@ -512,8 +508,8 @@ export const WhatsAppInboxPage = () => {
                         onClick={() => setInspectedMsgId(isInspecting ? null : msg.id)}
                         className="underline hover:text-white flex items-center gap-1 cursor-pointer"
                       >
-                        <Code2 className="w-3 h-3" />
-                        <span>{isInspecting ? 'Hide AI JSON' : 'Inspect AI JSON'}</span>
+                        <HelpCircle className="w-3 h-3" />
+                        <span>{isInspecting ? 'Hide AI details' : 'Why AI said this'}</span>
                       </button>
                     )}
                   </div>
@@ -541,15 +537,36 @@ export const WhatsAppInboxPage = () => {
                     </div>
                   )}
 
-                  {/* Expandable AI Structured Output Telemetry */}
+                  {/* Simple, Knowable Explanation of What AI Detected in This Message */}
                   {isAI && isInspecting && msg.aiMetadata && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-700">
-                      <div className="text-[11px] font-mono text-emerald-300 mb-1">
-                        Internal Structured AI Analysis (Hidden from WhatsApp Customer):
+                    <div className="mt-3 pt-2.5 border-t border-slate-700 space-y-1.5 text-xs text-slate-200">
+                      <div className="text-[11px] font-bold text-emerald-300">
+                        What AI understood from the customer:
                       </div>
-                      <pre className="text-[11px] font-mono text-slate-200 bg-slate-950 p-2.5 rounded-lg overflow-x-auto">
-                        {JSON.stringify(msg.aiMetadata, null, 2)}
-                      </pre>
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950 p-2.5 rounded-lg text-[11px]">
+                        <div>
+                          <span className="text-slate-400">Topic: </span>
+                          <span className="font-semibold text-white">{msg.aiMetadata.intent}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Lead Score: </span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            {msg.aiMetadata.lead_score}/100 ({msg.aiMetadata.lead_type})
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Service: </span>
+                          <span className="text-white">
+                            {msg.aiMetadata.interested_service || 'General'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Budget: </span>
+                          <span className="font-mono text-white">
+                            {msg.aiMetadata.budget || 'Not shared yet'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -574,14 +591,12 @@ export const WhatsAppInboxPage = () => {
           })}
         </div>
 
-        {/* 1-Click AI Smart Suggested Replies Bar */}
+        {/* 1-Click Quick Replies Bar */}
         {conv.suggestedReplies && conv.suggestedReplies.length > 0 && (
           <div className="bg-white border-t border-slate-200 px-3.5 py-2 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-indigo-600" />
-                <span>AI Suggested Smart Replies ({conv.language} Match — Click to populate):</span>
-              </span>
+            <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-indigo-600" />
+              <span>Quick Replies (Click any reply to fill the box below):</span>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               {conv.suggestedReplies.map((suggestion, idx) => (
@@ -607,7 +622,7 @@ export const WhatsAppInboxPage = () => {
             type="button"
             onClick={handleAttachDemoDocument}
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            title="Attach Quotation PDF / Media"
+            title="Send Sample Quotation PDF"
           >
             <Paperclip className="w-4 h-4" />
           </button>
@@ -615,11 +630,7 @@ export const WhatsAppInboxPage = () => {
             type="text"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            placeholder={
-              conv.aiEnabled
-                ? 'Type a manual reply or click an AI Smart Reply above...'
-                : 'Type your reply to send via WhatsApp Cloud API...'
-            }
+            placeholder="Type your message to the customer..."
             className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
           />
           <button
@@ -627,57 +638,125 @@ export const WhatsAppInboxPage = () => {
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Send WhatsApp</span>
+            <span>Send Reply</span>
           </button>
         </form>
       </div>
 
-      {/* RIGHT PANE: CUSTOMER & LEAD INTELLIGENCE DOSSIER */}
+      {/* RIGHT PANE: SIMPLE "WHAT AI KNOWS ABOUT THIS CUSTOMER" */}
       <div className="w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white overflow-y-auto p-4 space-y-5 shrink-0">
-        {/* Customer Header & Quick Links */}
+        {/* 1. Customer Summary */}
         <div className="pb-4 border-b border-slate-200">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900">{contact?.name}</h3>
+            <h3 className="text-sm font-bold text-slate-900">What AI Knows</h3>
             {lead && (
               <Link
                 to={`/leads/${lead.id}`}
                 className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
               >
-                <span>Full Lead Dossier</span>
+                <span>Full Details</span>
                 <ExternalLink className="w-3 h-3" />
               </Link>
             )}
           </div>
           <div className="text-xs text-slate-600 mt-1 space-y-0.5">
-            <div className="font-mono font-semibold text-slate-800">{contact?.phone}</div>
-            <div>
-              {contact?.company} · {contact?.roleTitle || 'Decision Maker'}
+            <div className="font-bold text-slate-900">
+              {contact?.name} · {contact?.company}
             </div>
-            <div className="text-[11px] text-slate-500">
+            <div>
               {contact?.location} · Best time: {contact?.bestTimeToContact || '10 AM – 6 PM'}
             </div>
           </div>
         </div>
 
-        {/* AI Recommended Next Best Action */}
+        {/* 2. Simple 3-Box Summary (What they want, Budget, Timeline) */}
         {lead && (
-          <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5" />
-                <span>AI Recommended Next Action</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-400">{lead.customerSentiment}</span>
+          <div className="space-y-2.5 pb-4 border-b border-slate-200">
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="text-[11px] text-slate-500">Service They Want</div>
+              <div className="text-xs font-bold text-slate-900 mt-0.5">
+                {lead.interestedService}
+              </div>
             </div>
-            <p className="text-xs text-slate-100 leading-relaxed">{lead.recommendedNextAction}</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-[11px] text-slate-500">Confirmed Budget</div>
+                <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5 tabular-nums">
+                  {lead.budget}
+                </div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-[11px] text-slate-500">Start Timeline</div>
+                <div className="text-xs font-semibold text-slate-900 mt-0.5">{lead.timeline}</div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* AI Qualification Score & 5-Factor Breakdown */}
+        {/* 3. Recommended Next Step & Buying Signals */}
+        {lead && (
+          <div className="space-y-3 pb-4 border-b border-slate-200">
+            <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-1.5">
+              <div className="text-[11px] font-bold text-emerald-400">
+                Suggested Next Step for You:
+              </div>
+              <p className="text-xs text-slate-100 leading-relaxed">{lead.recommendedNextAction}</p>
+            </div>
+
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-3">
+              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5 mb-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Why they look ready to buy:</span>
+              </div>
+              <ul className="space-y-1 text-xs text-slate-700">
+                {lead.buyingSignals.map((sig, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="text-emerald-600 font-bold">•</span>
+                    <span>{sig}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {lead.detectedObjections.length > 0 && (
+              <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3">
+                <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 mb-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Questions / Concerns to answer:</span>
+                </div>
+                <ul className="space-y-1 text-xs text-slate-700">
+                  {lead.detectedObjections.map((obj, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className="text-amber-600 font-bold">•</span>
+                      <span>{obj}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 4. Lead Score & Status Controls (With Optional Expandable Score Breakdown) */}
         {lead && (
           <div className="space-y-3 pb-4 border-b border-slate-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900">AI Lead Score & Rubric</span>
+              <div>
+                <div className="text-xs font-bold text-slate-900">AI Lead Score</div>
+                <button
+                  type="button"
+                  onClick={() => setShowScoreDetails((prev) => !prev)}
+                  className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
+                >
+                  <span>{showScoreDetails ? 'Hide how score is calculated' : 'How is this scored?'}</span>
+                  {showScoreDetails ? (
+                    <ChevronUp className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
               <span
                 className={`text-base font-bold font-mono tabular-nums ${
                   lead.leadScore >= 81
@@ -687,56 +766,55 @@ export const WhatsAppInboxPage = () => {
                     : 'text-amber-700'
                 }`}
               >
-                {lead.leadScore} / 100 ({lead.leadType})
+                {lead.leadScore}/100 ({lead.leadType})
               </span>
             </div>
 
-            {/* 5-Factor Mini Rubric */}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-              {[
-                { label: 'Budget Readiness', val: lead.scoreBreakdown.budgetReadiness, max: 25 },
-                { label: 'Scope Specificity', val: lead.scoreBreakdown.needSpecificity, max: 25 },
-                { label: 'Timeline Urgency', val: lead.scoreBreakdown.timelineUrgency, max: 20 },
-                { label: 'Decision Authority', val: lead.scoreBreakdown.decisionAuthority, max: 15 },
-                { label: 'Chat Engagement', val: lead.scoreBreakdown.engagementDepth, max: 15 }
-              ].map((item) => {
-                const pct = Math.round((item.val / item.max) * 100);
-                return (
-                  <div key={item.label} className="space-y-0.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-slate-600">{item.label}</span>
-                      <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                        {item.val}/{item.max}
-                      </span>
+            {showScoreDetails && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                {[
+                  { label: 'Has Budget Ready', val: lead.scoreBreakdown.budgetReadiness, max: 25 },
+                  { label: 'Clear Requirement', val: lead.scoreBreakdown.needSpecificity, max: 25 },
+                  { label: 'Wants to Start Soon', val: lead.scoreBreakdown.timelineUrgency, max: 20 },
+                  { label: 'Decision Maker', val: lead.scoreBreakdown.decisionAuthority, max: 15 },
+                  { label: 'Active in Chat', val: lead.scoreBreakdown.engagementDepth, max: 15 }
+                ].map((item) => {
+                  const pct = Math.round((item.val / item.max) * 100);
+                  return (
+                    <div key={item.label} className="space-y-0.5">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-600">{item.label}</span>
+                        <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                          {item.val}/{item.max}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-sm overflow-hidden">
+                        <div
+                          className={`h-full ${
+                            pct >= 80
+                              ? 'bg-emerald-600'
+                              : pct >= 55
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-200 rounded-sm overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          pct >= 80
-                            ? 'bg-emerald-600'
-                            : pct >= 55
-                            ? 'bg-amber-500'
-                            : 'bg-slate-400'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Lead Type</label>
+                <label className="block text-[11px] text-slate-500 mb-1">Priority</label>
                 <select
                   value={lead.leadType}
-                  onChange={(e) =>
-                    updateLead(lead.id, { leadType: e.target.value })
-                  }
+                  onChange={(e) => updateLead(lead.id, { leadType: e.target.value })}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
                 >
-                  <option value="HOT">HOT</option>
+                  <option value="HOT">HOT (Ready)</option>
                   <option value="WARM">WARM</option>
                   <option value="COLD">COLD</option>
                   <option value="UNQUALIFIED">UNQUALIFIED</option>
@@ -745,27 +823,25 @@ export const WhatsAppInboxPage = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Pipeline Status</label>
+                <label className="block text-[11px] text-slate-500 mb-1">Deal Stage</label>
                 <select
                   value={lead.leadStatus}
-                  onChange={(e) =>
-                    updateLead(lead.id, { leadStatus: e.target.value })
-                  }
+                  onChange={(e) => updateLead(lead.id, { leadStatus: e.target.value })}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
                 >
                   <option value="NEW">NEW</option>
                   <option value="CONTACTED">CONTACTED</option>
                   <option value="QUALIFIED">QUALIFIED</option>
-                  <option value="PROPOSAL">PROPOSAL</option>
+                  <option value="PROPOSAL">PROPOSAL SENT</option>
                   <option value="NEGOTIATION">NEGOTIATION</option>
-                  <option value="WON">WON</option>
+                  <option value="WON">WON (CLOSED)</option>
                   <option value="LOST">LOST</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Assigned Sales Agent</label>
+              <label className="block text-[11px] text-slate-500 mb-1">Handled By</label>
               <select
                 value={lead.assignedAgentId}
                 onChange={(e) => updateLead(lead.id, { assignedAgentId: e.target.value })}
@@ -781,57 +857,7 @@ export const WhatsAppInboxPage = () => {
           </div>
         )}
 
-        {/* Buying Signals & Objections Discovered by AI */}
-        {lead && (
-          <div className="space-y-3 pb-4 border-b border-slate-200">
-            <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-3">
-              <div className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5 mb-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Extracted Buying Signals ({lead.buyingSignals.length})</span>
-              </div>
-              <ul className="space-y-1 text-xs text-slate-700">
-                {lead.buyingSignals.map((sig, i) => (
-                  <li key={i} className="flex items-start gap-1.5">
-                    <span className="text-emerald-600 font-bold">•</span>
-                    <span>{sig}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {lead.detectedObjections.length > 0 && (
-              <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3">
-                <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5 mb-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Detected Objections / Risks ({lead.detectedObjections.length})</span>
-                </div>
-                <ul className="space-y-1 text-xs text-slate-700">
-                  {lead.detectedObjections.map((obj, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="text-amber-600 font-bold">•</span>
-                      <span>{obj}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <dl className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <dt className="text-[11px] text-slate-500">Requested Service</dt>
-                <dd className="font-semibold text-slate-900 mt-0.5">{lead.interestedService}</dd>
-              </div>
-              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <dt className="text-[11px] text-slate-500">Extracted Budget</dt>
-                <dd className="font-mono font-bold text-emerald-700 mt-0.5 tabular-nums">
-                  {lead.budget}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        )}
-
-        {/* Schedule Follow-up Action */}
+        {/* 5. Schedule Reminder / Follow-up */}
         <div className="pb-4 border-b border-slate-200">
           <button
             type="button"
@@ -839,7 +865,7 @@ export const WhatsAppInboxPage = () => {
             className="w-full py-2 px-3 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <CalendarPlus className="w-3.5 h-3.5" />
-            <span>Schedule Follow-up Task</span>
+            <span>Schedule Call / Reminder</span>
           </button>
 
           {showFollowUpModal && (
@@ -867,23 +893,23 @@ export const WhatsAppInboxPage = () => {
                 type="text"
                 value={followUpNote}
                 onChange={(e) => setFollowUpNote(e.target.value)}
-                placeholder="Follow-up note..."
+                placeholder="What should we follow up on?"
                 className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded bg-white"
               />
               <button
                 type="submit"
-                className="w-full py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800"
+                className="w-full py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 cursor-pointer"
               >
-                Save Follow-up
+                Save Reminder
               </button>
             </form>
           )}
         </div>
 
-        {/* Agent Notes Section */}
+        {/* 6. Quick Team Notes */}
         {lead && (
           <div className="space-y-2.5">
-            <div className="text-xs font-bold text-slate-900">Sales Notes</div>
+            <div className="text-xs font-bold text-slate-900">Team Notes</div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -897,14 +923,14 @@ export const WhatsAppInboxPage = () => {
                 type="text"
                 value={noteInput}
                 onChange={(e) => setNoteInput(e.target.value)}
-                placeholder="Add internal note..."
+                placeholder="Write a quick note..."
                 className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg"
               />
               <button
                 type="submit"
-                className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg cursor-pointer"
               >
-                Add
+                Save
               </button>
             </form>
             <div className="space-y-2 mt-2">

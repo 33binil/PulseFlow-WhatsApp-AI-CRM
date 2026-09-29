@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -18,12 +18,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   Sparkles,
-  TrendingUp,
-  Lightbulb,
-  BookOpen,
-  Zap,
-  ArrowUpRight,
-  Check
+  MessageSquare,
+  Check,
+  BarChart3,
+  LayoutDashboard,
+  HelpCircle,
+  X
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 import {
@@ -44,6 +44,9 @@ export const DashboardPage = () => {
     takeOverConversation
   } = useCRM();
   const navigate = useNavigate();
+
+  const [dashboardTab, setDashboardTab] = useState('SIMPLE');
+  const [showHowItWorks, setShowHowItWorks] = useState(true);
 
   const totalLeads = leads.length;
   const hotLeads = leads.filter((l) => l.leadType === 'HOT');
@@ -82,712 +85,681 @@ export const DashboardPage = () => {
   const getContactPhone = (contactId) =>
     contacts.find((c) => c.id === contactId)?.phone || '';
 
+  const getContactCompany = (contactId) =>
+    contacts.find((c) => c.id === contactId)?.company || '';
+
   const formatLakhs = (val) => `₹${(val / 100000).toFixed(2)}L`;
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
-      {/* Executive Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
+      {/* Friendly, Knowable Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-emerald-700 font-semibold">
-            PULSEFLOW AI REVENUE & WHATSAPP OPERATIONS CENTER
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-0.5 tracking-tight">
-            Executive CRM & Intelligence Dashboard
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Good morning — Here is what’s happening today
           </h1>
+          <p className="text-sm text-slate-600 mt-0.5">
+            Your AI is answering WhatsApp messages, finding customer budgets, and highlighting who is ready to buy.
+          </p>
         </div>
+
         <div className="flex flex-wrap items-center gap-2.5">
-          <Link
-            to="/insights"
-            className="px-3.5 py-2 text-xs font-semibold border border-indigo-200 bg-indigo-50/80 text-indigo-900 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1.5 whitespace-nowrap"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>AI Knows & Findings ({strategicFindings.length + unresolvedGaps.length})</span>
-          </Link>
-          <Link
-            to="/leads"
-            className="px-3.5 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-800 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
-          >
-            Lead Pipeline ({formatLakhs(totalPipelineInr)})
-          </Link>
+          {/* View Mode Switcher: Simple Daily View vs Full Charts & 10 Metrics */}
+          <div className="flex items-center bg-slate-200/70 p-1 rounded-lg">
+            <button
+              onClick={() => setDashboardTab('SIMPLE')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+                dashboardTab === 'SIMPLE'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Simple Overview</span>
+            </button>
+            <button
+              onClick={() => setDashboardTab('CHARTS')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+                dashboardTab === 'CHARTS'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Charts & All 10 Stats</span>
+            </button>
+          </div>
+
           <Link
             to="/inbox"
-            className="px-4 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap shadow-2xs"
+            className="px-4 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap flex items-center gap-1.5"
           >
-            Open WhatsApp Inbox
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Open WhatsApp Inbox</span>
           </Link>
         </div>
       </div>
 
-      {/* Executive AI Daily Intelligence Briefing Banner */}
-      <div className="bg-[#0B1120] text-white rounded-xl p-5 border border-slate-800 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-[11px] font-mono font-semibold text-emerald-400">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>TODAY'S AI DISCOVERY BRIEFING · AUTO-EXTRACTED FROM WHATSAPP THREADS</span>
-            </div>
-            <h2 className="text-base sm:text-lg font-bold text-white leading-snug">
-              AI qualified {formatLakhs(hotPipelineInr)} in Hot Pipeline across {hotLeads.length} high-intent deals & detected {unresolvedGaps.length} Knowledge Base gaps
-            </h2>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Key Finding: Prospects chatting in <strong className="text-emerald-300">Manglish</strong> &{' '}
-              <strong className="text-indigo-300">Malayalam</strong> disclosed confirmed budgets 2.4x faster today.{' '}
-              <strong className="text-white">Anita Desai (₹8.5L SAP ERP)</strong> and{' '}
-              <strong className="text-white">Rahul Menon (₹1.0L E-Commerce)</strong> are ready for immediate closing actions.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
-            <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-3">
-              <div className="text-[10px] font-mono uppercase text-slate-400">Total Pipeline</div>
-              <div className="text-lg font-bold font-mono tabular-nums text-white mt-0.5">
-                {formatLakhs(totalPipelineInr)}
-              </div>
-              <div className="text-[11px] text-emerald-400 font-mono">
-                {formatLakhs(hotPipelineInr)} Hot (81+ Score)
-              </div>
-            </div>
-
-            <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-3">
-              <div className="text-[10px] font-mono uppercase text-slate-400">Buying Signals</div>
-              <div className="text-lg font-bold font-mono tabular-nums text-emerald-400 mt-0.5">
-                {leads.reduce((acc, l) => acc + l.buyingSignals.length, 0)} Signals
-              </div>
-              <div className="text-[11px] text-slate-400 font-mono">
-                {leads.reduce((acc, l) => acc + l.detectedObjections.length, 0)} Objections flagged
-              </div>
-            </div>
-
-            <div className="col-span-2 sm:col-span-1 bg-indigo-950/60 border border-indigo-500/30 rounded-lg p-3 flex flex-col justify-between">
-              <div className="text-[10px] font-mono uppercase text-indigo-300">AI Findings Hub</div>
-              <Link
-                to="/insights"
-                className="mt-1 inline-flex items-center justify-between text-xs font-bold text-white hover:text-emerald-300 transition-colors"
-              >
-                <span>Explore All Knows</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </Link>
-              <div className="text-[10px] text-indigo-300 font-mono">
-                {unresolvedGaps.length} 1-click KB fixes ready
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 10 Required KPI Metrics Grid (High-Craft Bento with Top Accent Bars & Tabular Numerals) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-        <div className="bg-white border border-slate-200 border-t-2 border-t-slate-900 rounded-xl p-4 shadow-2xs">
-          <div className="text-xs font-medium text-slate-500">Total Leads</div>
-          <div className="text-2xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
-            {totalLeads}
-          </div>
-          <div className="text-[11px] font-mono text-slate-500 mt-1">
-            Pipeline: {formatLakhs(totalPipelineInr)}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 border-t-2 border-t-emerald-600 rounded-xl p-4 shadow-2xs">
-          <div className="text-xs font-medium text-slate-500">Hot Leads (81–100)</div>
-          <div className="text-2xl font-bold font-mono text-emerald-700 mt-1 tabular-nums">
-            {hotLeads.length}
-          </div>
-          <div className="text-[11px] font-mono text-emerald-700 font-semibold mt-1">
-            Value: {formatLakhs(hotPipelineInr)}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 border-t-2 border-t-amber-500 rounded-xl p-4 shadow-2xs">
-          <div className="text-xs font-medium text-slate-500">Warm Leads (31–80)</div>
-          <div className="text-2xl font-bold font-mono text-amber-700 mt-1 tabular-nums">
-            {warmLeads.length}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            Active qualification stage
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 border-t-2 border-t-slate-400 rounded-xl p-4 shadow-2xs">
-          <div className="text-xs font-medium text-slate-500">Cold / Unqualified</div>
-          <div className="text-2xl font-bold font-mono text-slate-700 mt-1 tabular-nums">
-            {coldLeads.length} / {unqualifiedLeads.length}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            AI nurture sequence active
-          </div>
-        </div>
-
-        <div className="col-span-2 sm:col-span-1 bg-white border border-slate-200 border-t-2 border-t-indigo-600 rounded-xl p-4 shadow-2xs">
-          <div className="text-xs font-medium text-slate-500">Conversion Rate</div>
-          <div className="text-2xl font-bold font-mono text-indigo-700 mt-1 tabular-nums">
-            {conversionRate}%
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            {wonLeadsCount} deals won this cycle
-          </div>
-        </div>
-      </div>
-
-      {/* Second Row of Operational KPIs */}
-      <div className="bg-white border border-slate-200 rounded-xl divide-y sm:divide-y-0 sm:divide-x divide-slate-200 grid grid-cols-2 sm:grid-cols-4 shadow-2xs">
-        <div className="p-4">
-          <div className="text-xs text-slate-500">Active WhatsApp Threads</div>
-          <div className="text-xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
-            {newConversationsCount}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">English, Manglish & Malayalam</div>
-        </div>
-        <div className="p-4">
-          <div className="text-xs text-slate-500">AI Handled Conversations</div>
-          <div className="text-xl font-bold font-mono text-emerald-700 mt-1 tabular-nums">
-            {aiHandledCount}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">94.2% avg structured confidence</div>
-        </div>
-        <div className="p-4">
-          <div className="text-xs text-slate-500">Human Handled Conversations</div>
-          <div className="text-xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
-            {humanHandledCount}
-          </div>
-          <div className="text-[11px] text-rose-700 font-medium mt-0.5">
-            {humanAttentionConvs.length} awaiting urgent takeover
-          </div>
-        </div>
-        <div className="p-4">
-          <div className="text-xs text-slate-500">Pending Follow-ups</div>
-          <div className="text-xl font-bold font-mono text-amber-700 mt-1 tabular-nums">
-            {pendingFollowUps.length}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            {dueTodayFollowUps.length} due today or overdue
-          </div>
-        </div>
-      </div>
-
-      {/* NEW SECTION: What AI Knows & Discovered Today (Strategic Findings + 1-Click Knowledge Gap Trainer) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Columns: Strategic Deal & Language Findings */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+      {/* Simple 3-Step Visual Guide (Knowable at a glance for any user) */}
+      {showHowItWorks ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-amber-500" />
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  Key AI Findings & Deal Closing Recommendations
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Synthesized from customer intent, budget disclosures, and objection patterns
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/insights"
-              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
-            >
-              <span>All Findings</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {strategicFindings.map((finding) => (
-              <div
-                key={finding.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300 transition-all flex flex-col justify-between gap-3"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-100 text-emerald-800">
-                      {finding.metricBadge}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {finding.category}
-                    </span>
-                  </div>
-                  <h3 className="text-xs font-bold text-slate-900 leading-snug">
-                    {finding.title}
-                  </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {finding.findingSummary}
-                  </p>
-                </div>
-
-                <div className="pt-2.5 border-t border-slate-200/80 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-700 truncate max-w-[70%]">
-                    <strong className="text-slate-900">Playbook:</strong> {finding.recommendation}
-                  </span>
-                  <Link
-                    to={finding.actionLink}
-                    className="text-xs font-semibold text-slate-900 hover:text-emerald-700 shrink-0 flex items-center gap-1"
-                  >
-                    <span>Act</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Column: AI-Detected Knowledge Base Gaps (1-Click Trainable) */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-indigo-600" />
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">
-                    Discovered Knowledge Gaps ({unresolvedGaps.length})
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Frequent WhatsApp questions needing KB answers
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="divide-y divide-slate-100 mt-2">
-              {knowledgeGaps.map((gap) => (
-                <div key={gap.id} className="py-3 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-indigo-700 font-semibold">
-                      {gap.language} · Asked {gap.occurrences}x
-                    </span>
-                    <span className="text-amber-700">
-                      Confidence: {Math.round(gap.avgConfidence * 100)}%
-                    </span>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-900 leading-snug">
-                    "{gap.questionAsked}"
-                  </p>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-slate-500 truncate max-w-[60%]">
-                      Draft: {gap.suggestedTitle}
-                    </span>
-                    {gap.resolved ? (
-                      <span className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Trained
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => resolveKnowledgeGapToArticle(gap.id)}
-                        className="px-2.5 py-1 bg-slate-900 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-md transition-colors cursor-pointer"
-                      >
-                        + Train AI in 1-Click
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <Link
-            to="/knowledge-base"
-            className="w-full py-2 text-center text-xs font-semibold border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            Manage Full Knowledge Base →
-          </Link>
-        </div>
-      </div>
-
-      {/* Priority Operational Queues: Human Attention Required & Follow-ups Due Today */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Human Attention Required */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <h2 className="text-sm font-bold text-slate-900">
-                Human Attention Required ({humanAttentionConvs.length})
+              <HelpCircle className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-xs font-bold text-slate-900">
+                How PulseFlow Works in 3 Simple Steps
               </h2>
             </div>
-            <Link
-              to="/conversations"
-              className="text-xs text-slate-600 hover:text-slate-900 font-medium"
+            <button
+              onClick={() => setShowHowItWorks(false)}
+              className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer"
             >
-              View All Escalations
-            </Link>
+              <span>Hide guide</span>
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {humanAttentionConvs.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
-              All WhatsApp conversations are currently operating smoothly without escalations.
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 mt-2">
-              {humanAttentionConvs.map((conv) => (
-                <div
-                  key={conv.id}
-                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-bold text-slate-900">
-                        {getContactName(conv.contactId)}
-                      </span>
-                      <span aria-hidden="true" className="text-slate-300">·</span>
-                      <span className="font-mono text-slate-500">
-                        {getContactPhone(conv.contactId)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-rose-700 font-medium">
-                      Escalation Trigger: {conv.handoffReason || 'Customer requested human agent'}
-                    </p>
-                    {conv.keyFinding && (
-                      <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200/70 px-2 py-1 rounded">
-                        <strong>AI Know:</strong> {conv.keyFinding}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => {
-                        takeOverConversation(conv.id);
-                        navigate(`/inbox?convId=${conv.id}`);
-                      }}
-                      className="px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      Take Over Chat
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Follow-ups Due Today */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Follow-ups Due Today ({dueTodayFollowUps.length})
-              </h2>
-            </div>
-            <Link
-              to="/follow-ups"
-              className="text-xs text-slate-600 hover:text-slate-900 font-medium"
-            >
-              Manage Schedule
-            </Link>
-          </div>
-
-          <div className="divide-y divide-slate-100 mt-2">
-            {dueTodayFollowUps.slice(0, 4).map((fu) => (
-              <div
-                key={fu.id}
-                className="py-3 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs">
-                    <Link
-                      to={`/leads/${fu.leadId}`}
-                      className="font-bold text-slate-900 hover:underline"
-                    >
-                      {getContactName(fu.contactId)}
-                    </Link>
-                    <span aria-hidden="true" className="text-slate-300">·</span>
-                    <span className="font-mono text-slate-600 tabular-nums">
-                      {fu.date} at {fu.time}
-                    </span>
-                    <span aria-hidden="true" className="text-slate-300">·</span>
-                    <span
-                      className={`font-semibold ${
-                        fu.status === 'OVERDUE'
-                          ? 'text-rose-700'
-                          : fu.status === 'COMPLETED'
-                          ? 'text-emerald-700'
-                          : 'text-amber-700'
-                      }`}
-                    >
-                      {fu.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 truncate mt-0.5">{fu.note}</p>
-                </div>
-                {fu.status !== 'COMPLETED' && (
-                  <button
-                    onClick={() => updateFollowUpStatus(fu.id, 'COMPLETED')}
-                    className="px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Complete</span>
-                  </button>
-                )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+              <div className="text-xs font-bold text-slate-900">
+                1. Customer Chats on WhatsApp
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Customers message you in <strong>English, Manglish, or Malayalam</strong>. AI replies
+                automatically using your company’s pricing and service list.
+              </p>
+            </div>
 
-      {/* Charts Row 1: Leads Over Time & Hot/Warm/Cold Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200 rounded-xl p-5 lg:col-span-2 shadow-2xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Leads & Hot Qualification Velocity Over Time
-              </h2>
-              <p className="text-xs text-slate-500">
-                Inbound WhatsApp leads vs AI-qualified Hot Leads (Score 81+)
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+              <div className="text-xs font-bold text-slate-900">
+                2. AI Learns Their Need & Budget
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                AI reads the chat to find out <strong>what they want</strong>,{' '}
+                <strong>their budget</strong>, and <strong>how soon they want to start</strong>,
+                giving them a score out of 100.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+              <div className="text-xs font-bold text-slate-900">
+                3. You Close the Hot Deals
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                When a customer is serious (<strong>Hot Lead</strong>) or asks for a manager, we
+                notify you below so you can step in and close the sale.
               </p>
             </div>
           </div>
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ANALYTICS_LEADS_OVER_TIME}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Area
-                  type="monotone"
-                  dataKey="totalLeads"
-                  name="Total Leads"
-                  stroke="#0f172a"
-                  fill="#cbd5e1"
-                  fillOpacity={0.4}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="hotLeads"
-                  name="Hot Leads"
-                  stroke="#059669"
-                  fill="#a7f3d0"
-                  fillOpacity={0.5}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
         </div>
+      ) : (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowHowItWorks(true)}
+            className="text-xs text-emerald-700 hover:underline font-medium flex items-center gap-1 cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Show "How PulseFlow Works" guide</span>
+          </button>
+        </div>
+      )}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-slate-900">
-            Hot / Warm / Cold Lead Distribution
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Segmented by AI lead score thresholds
-          </p>
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={distributionData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="tier" type="category" width={105} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="count" name="Leads" fill="#0f172a" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+      {/* 4 Simple, Self-Explanatory Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link
+          to="/leads"
+          className="bg-white border border-slate-200 border-t-2 border-t-emerald-600 rounded-xl p-5 hover:border-slate-300 transition-colors"
+        >
+          <div className="text-xs font-semibold text-slate-500">
+            Hot Leads (Ready to Buy)
           </div>
-        </div>
+          <div className="text-2xl font-bold font-mono text-emerald-700 mt-1 tabular-nums">
+            {hotLeads.length} customers · {formatLakhs(hotPipelineInr)}
+          </div>
+          <p className="text-xs text-slate-600 mt-1.5">
+            Scored 81+ by AI because they shared a clear budget and timeline.
+          </p>
+        </Link>
+
+        <Link
+          to="/inbox"
+          className="bg-white border border-slate-200 border-t-2 border-t-rose-600 rounded-xl p-5 hover:border-slate-300 transition-colors"
+        >
+          <div className="text-xs font-semibold text-slate-500">
+            Chats Waiting for You
+          </div>
+          <div className="text-2xl font-bold font-mono text-rose-700 mt-1 tabular-nums">
+            {humanAttentionConvs.length} {humanAttentionConvs.length === 1 ? 'chat' : 'chats'}
+          </div>
+          <p className="text-xs text-slate-600 mt-1.5">
+            AI paused itself here because the customer asked for a human or custom quote.
+          </p>
+        </Link>
+
+        <Link
+          to="/insights"
+          className="bg-white border border-slate-200 border-t-2 border-t-indigo-600 rounded-xl p-5 hover:border-slate-300 transition-colors"
+        >
+          <div className="text-xs font-semibold text-slate-500">
+            What AI Learned Today
+          </div>
+          <div className="text-2xl font-bold font-mono text-indigo-700 mt-1 tabular-nums">
+            {leads.reduce((acc, l) => acc + l.buyingSignals.length, 0)} buying signals
+          </div>
+          <p className="text-xs text-slate-600 mt-1.5">
+            Plus {unresolvedGaps.length} new customer questions you can approve in 1 click.
+          </p>
+        </Link>
+
+        <Link
+          to="/follow-ups"
+          className="bg-white border border-slate-200 border-t-2 border-t-amber-500 rounded-xl p-5 hover:border-slate-300 transition-colors"
+        >
+          <div className="text-xs font-semibold text-slate-500">
+            Follow-up Tasks Due
+          </div>
+          <div className="text-2xl font-bold font-mono text-amber-700 mt-1 tabular-nums">
+            {pendingFollowUps.length} tasks ({dueTodayFollowUps.length} urgent)
+          </div>
+          <p className="text-xs text-slate-600 mt-1.5">
+            Scheduled calls and proposals to send to your leads today.
+          </p>
+        </Link>
       </div>
 
-      {/* Charts Row 2: Conversation Volume, Lead Source Performance, Conversion Trends */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-slate-900">
-            Conversation Volume (AI vs Human)
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Daily WhatsApp threads resolved by AI vs Sales Agents
-          </p>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ANALYTICS_LEADS_OVER_TIME}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="aiHandled" name="AI Handled" stackId="a" fill="#059669" />
-                <Bar dataKey="humanHandled" name="Human Handled" stackId="a" fill="#334155" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {dashboardTab === 'SIMPLE' ? (
+        /* SIMPLE DAILY VIEW: 2 Clear Columns (Your Action List + What AI Knows About Customers) */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT 5 COLUMNS: YOUR ACTION LIST RIGHT NOW */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* 1. Chats Needing Human Reply */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    1. Customers Waiting for Your Reply ({humanAttentionConvs.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Click "Reply in WhatsApp" to take over from AI
+                  </p>
+                </div>
+              </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-slate-900">Lead Source Performance</h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Total leads vs Won deals by acquisition channel
-          </p>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ANALYTICS_LEAD_SOURCES}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="source" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="leads" name="Inbound Leads" fill="#64748b" />
-                <Bar dataKey="won" name="Deals Won" fill="#0f172a" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-slate-900">Conversion Rate Trend (%)</h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Lead-to-Win conversion efficiency over 30 days
-          </p>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={ANALYTICS_LEADS_OVER_TIME}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Line
-                  type="monotone"
-                  dataKey="conversionRate"
-                  name="Conversion %"
-                  stroke="#059669"
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Tables: Hot Leads with Next Best Action & Recent Conversations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Hot & Recent Leads */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <h2 className="text-sm font-bold text-slate-900">
-              Qualified Leads & AI Next Best Action
-            </h2>
-            <Link
-              to="/leads"
-              className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"
-            >
-              <span>All Leads</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="overflow-x-auto mt-2">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-2 px-2 font-semibold">Customer</th>
-                  <th className="py-2 px-2 font-semibold">Service & Next Action</th>
-                  <th className="py-2 px-2 font-semibold">Budget</th>
-                  <th className="py-2 px-2 font-semibold text-right">Score</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {leads.slice(0, 5).map((lead) => (
-                  <tr key={lead.id} className="hover:bg-slate-50">
-                    <td className="py-3 px-2">
-                      <Link
-                        to={`/leads/${lead.id}`}
-                        className="font-bold text-slate-900 hover:text-emerald-700"
-                      >
-                        {getContactName(lead.contactId)}
-                      </Link>
-                      <div className="text-[11px] text-slate-500">
-                        {lead.leadType} · {lead.leadStatus}
+              {humanAttentionConvs.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500">
+                  Great job! No customers are waiting for a human takeover right now.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {humanAttentionConvs.map((conv) => (
+                    <div key={conv.id} className="py-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-bold text-slate-900">
+                            {getContactName(conv.contactId)}
+                          </span>
+                          <span className="text-xs text-slate-400 mx-1.5">·</span>
+                          <span className="text-xs font-mono text-slate-600 tabular-nums">
+                            {getContactPhone(conv.contactId)}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-700">
+                          {conv.language}
+                        </span>
                       </div>
-                    </td>
-                    <td className="py-3 px-2 text-slate-700 max-w-xs">
-                      <div className="font-semibold text-slate-900">{lead.interestedService}</div>
-                      <div className="text-[11px] text-emerald-800 truncate mt-0.5">
-                        → {lead.recommendedNextAction}
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 font-mono font-semibold text-slate-900 tabular-nums">
-                      {lead.budget}
-                    </td>
-                    <td className="py-3 px-2 text-right font-mono font-bold tabular-nums">
-                      <span
-                        className={
-                          lead.leadScore >= 81
-                            ? 'text-emerald-700'
-                            : lead.leadScore >= 61
-                            ? 'text-indigo-700'
-                            : 'text-amber-700'
-                        }
-                      >
-                        {lead.leadScore}/100
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {/* Recent Conversations */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <h2 className="text-sm font-bold text-slate-900">
-              Recent WhatsApp Threads & Key Takeaways
-            </h2>
-            <Link
-              to="/inbox"
-              className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"
-            >
-              <span>Open Inbox</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-slate-100 mt-2">
-            {conversations.slice(0, 5).map((conv) => {
-              const lead = leads.find((l) => l.id === conv.leadId);
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => navigate(`/inbox?convId=${conv.id}`)}
-                  className="py-3 px-2 hover:bg-slate-50 rounded-lg cursor-pointer flex items-center justify-between gap-3"
+                      <div className="text-xs text-rose-700 font-medium">
+                        Why they need you: {conv.handoffReason || 'Requested human manager'}
+                      </div>
+
+                      {conv.keyFinding && (
+                        <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
+                          <strong>What AI knows:</strong> {conv.keyFinding}
+                        </div>
+                      )}
+
+                      <div className="pt-1">
+                        <button
+                          onClick={() => {
+                            takeOverConversation(conv.id);
+                            navigate(`/inbox?convId=${conv.id}`);
+                          }}
+                          className="w-full py-2 px-3 bg-slate-900 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                          Reply in WhatsApp Inbox →
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Follow-up Tasks Due Today */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    2. Follow-ups Due Today ({dueTodayFollowUps.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Calls and proposals scheduled for today
+                  </p>
+                </div>
+                <Link
+                  to="/follow-ups"
+                  className="text-xs font-semibold text-emerald-700 hover:underline"
                 >
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-bold text-slate-900">
-                        {getContactName(conv.contactId)}
-                      </span>
-                      <span aria-hidden="true" className="text-slate-300">·</span>
-                      <span className="text-indigo-700 font-medium">{conv.language}</span>
-                      <span aria-hidden="true" className="text-slate-300">·</span>
-                      <span
-                        className={`font-semibold ${
-                          conv.needsHumanAttention
-                            ? 'text-rose-700'
-                            : conv.aiEnabled
-                            ? 'text-emerald-700'
-                            : 'text-slate-700'
-                        }`}
-                      >
-                        {conv.needsHumanAttention
-                          ? 'Needs Human'
-                          : conv.aiEnabled
-                          ? 'AI Auto-Reply'
-                          : 'Agent Active'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 truncate">
-                      {conv.keyFinding || conv.lastMessage}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-[11px] font-mono text-slate-500 tabular-nums">
-                      {conv.lastMessageTime}
-                    </div>
-                    {lead && (
-                      <div className="text-[11px] font-mono font-semibold text-slate-900 mt-0.5 tabular-nums">
-                        Score: {lead.leadScore}
+                  See all
+                </Link>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {dueTodayFollowUps.slice(0, 4).map((fu) => (
+                  <div
+                    key={fu.id}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900">
+                        {getContactName(fu.contactId)}
+                        <span className="font-normal text-slate-500 font-mono ml-2 tabular-nums">
+                          {fu.time}
+                        </span>
                       </div>
+                      <p className="text-xs text-slate-600 mt-0.5">{fu.note}</p>
+                    </div>
+                    {fu.status !== 'COMPLETED' && (
+                      <button
+                        onClick={() => updateFollowUpStatus(fu.id, 'COMPLETED')}
+                        className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-300 text-slate-800 flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Done</span>
+                      </button>
                     )}
                   </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Teach AI Missing Answers in 1 Click */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    3. New Questions Customers Asked ({unresolvedGaps.length})
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Approve AI’s suggested answer in 1 click so AI knows it next time
+                  </p>
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {knowledgeGaps.map((gap) => (
+                  <div key={gap.id} className="py-3 space-y-2">
+                    <div className="text-xs font-bold text-slate-900">
+                      Customer asked: <span className="text-emerald-800">"{gap.questionAsked}"</span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      <strong>Suggested Answer:</strong> {gap.suggestedContent}
+                    </p>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-slate-500">
+                        Asked {gap.occurrences} times in {gap.language}
+                      </span>
+                      {gap.resolved ? (
+                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Added to AI Knowledge Base
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => resolveKnowledgeGapToArticle(gap.id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                        >
+                          + Approve Answer for AI
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT 7 COLUMNS: WHAT AI KNOWS ABOUT YOUR CUSTOMERS */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    What AI Knows About Your Customers
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Plain-English summary extracted automatically from their WhatsApp messages
+                  </p>
+                </div>
+                <Link
+                  to="/insights"
+                  className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-1"
+                >
+                  <span>Open Full AI Insights Page</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="space-y-3">
+                {leads.map((lead) => {
+                  const conv = conversations.find((c) => c.id === lead.conversationId);
+                  return (
+                    <div
+                      key={lead.id}
+                      className="p-4 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors space-y-3"
+                    >
+                      {/* Top Row: Customer Name, Company, Language, Score */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <Link
+                            to={`/leads/${lead.id}`}
+                            className="text-sm font-bold text-slate-900 hover:text-emerald-700"
+                          >
+                            {getContactName(lead.contactId)}
+                          </Link>
+                          <span className="text-xs text-slate-500 ml-1.5">
+                            · {getContactCompany(lead.contactId)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs font-mono tabular-nums">
+                          <span className="text-slate-600 font-sans">
+                            Chats in <strong>{conv?.language || 'English'}</strong>
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span
+                            className={`font-bold ${
+                              lead.leadType === 'HOT'
+                                ? 'text-emerald-700'
+                                : lead.leadType === 'WARM'
+                                ? 'text-amber-700'
+                                : 'text-slate-600'
+                            }`}
+                          >
+                            {lead.leadType} ({lead.leadScore}/100)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Middle Row: 3 Simple Facts (What they want, Budget, Timeline) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-lg border border-slate-200/70 text-xs">
+                        <div>
+                          <div className="text-[11px] text-slate-500">What they want</div>
+                          <div className="font-semibold text-slate-900 mt-0.5">
+                            {lead.interestedService}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-slate-500">Their Budget</div>
+                          <div className="font-mono font-bold text-emerald-700 mt-0.5 tabular-nums">
+                            {lead.budget}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-slate-500">When they want to start</div>
+                          <div className="font-semibold text-slate-900 mt-0.5">
+                            {lead.timeline}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Plain English Summary of what AI noticed */}
+                      <div className="text-xs text-slate-700 space-y-1">
+                        <div>
+                          <strong className="text-slate-900">What AI noticed: </strong>
+                          <span>{lead.aiSummary}</span>
+                        </div>
+                        <div className="text-emerald-800 font-medium">
+                          <strong>Recommended Next Step: </strong>
+                          <span>{lead.recommendedNextAction}</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Action Links */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <Link
+                          to={`/leads/${lead.id}`}
+                          className="font-semibold text-slate-600 hover:text-slate-900"
+                        >
+                          View Customer Details
+                        </Link>
+                        <Link
+                          to={`/inbox?convId=${lead.conversationId}`}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                        >
+                          <span>Open WhatsApp Chat</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Key Business Patterns Discovered */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Helpful Patterns AI Noticed Across All Chats
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Simple tips to help your team close more sales
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {strategicFindings.slice(0, 2).map((finding) => (
+                  <div
+                    key={finding.id}
+                    className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5"
+                  >
+                    <div className="text-xs font-bold text-emerald-700">{finding.metricBadge}</div>
+                    <div className="text-xs font-bold text-slate-900">{finding.title}</div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {finding.recommendation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* CHARTS & ALL 10 KPI METRICS VIEW */
+        <div className="space-y-6">
+          {/* Complete 10 KPI Metrics Grid */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <h2 className="text-sm font-bold text-slate-900">
+              All 10 CRM & WhatsApp Performance Metrics
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">1. Total Leads</div>
+                <div className="text-xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
+                  {totalLeads}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">2. Hot Leads (81–100)</div>
+                <div className="text-xl font-bold font-mono text-emerald-700 mt-1 tabular-nums">
+                  {hotLeads.length}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">3. Warm Leads (31–80)</div>
+                <div className="text-xl font-bold font-mono text-amber-700 mt-1 tabular-nums">
+                  {warmLeads.length}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">4. Cold Leads (0–30)</div>
+                <div className="text-xl font-bold font-mono text-slate-700 mt-1 tabular-nums">
+                  {coldLeads.length}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">5. Unqualified Leads</div>
+                <div className="text-xl font-bold font-mono text-slate-500 mt-1 tabular-nums">
+                  {unqualifiedLeads.length}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">6. Active Conversations</div>
+                <div className="text-xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
+                  {newConversationsCount}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">7. AI Handled Chats</div>
+                <div className="text-xl font-bold font-mono text-emerald-700 mt-1 tabular-nums">
+                  {aiHandledCount}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">8. Human Handled Chats</div>
+                <div className="text-xl font-bold font-mono text-slate-900 mt-1 tabular-nums">
+                  {humanHandledCount}
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">9. Conversion Rate</div>
+                <div className="text-xl font-bold font-mono text-indigo-700 mt-1 tabular-nums">
+                  {conversionRate}%
+                </div>
+              </div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-500">10. Pending Follow-ups</div>
+                <div className="text-xl font-bold font-mono text-amber-700 mt-1 tabular-nums">
+                  {pendingFollowUps.length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 lg:col-span-2">
+              <h2 className="text-sm font-bold text-slate-900">Leads Over Time</h2>
+              <p className="text-xs text-slate-500 mb-4">
+                Total WhatsApp leads vs Hot leads over the last 7 weeks
+              </p>
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={ANALYTICS_LEADS_OVER_TIME}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Area
+                      type="monotone"
+                      dataKey="totalLeads"
+                      name="Total Leads"
+                      stroke="#0f172a"
+                      fill="#cbd5e1"
+                      fillOpacity={0.4}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="hotLeads"
+                      name="Hot Leads"
+                      stroke="#059669"
+                      fill="#a7f3d0"
+                      fillOpacity={0.5}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h2 className="text-sm font-bold text-slate-900">Hot / Warm / Cold Breakdown</h2>
+              <p className="text-xs text-slate-500 mb-4">Leads grouped by AI score</p>
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={distributionData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis dataKey="tier" type="category" width={105} tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="count" name="Leads" fill="#0f172a" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h2 className="text-sm font-bold text-slate-900">AI vs Human Chats</h2>
+              <p className="text-xs text-slate-500 mb-4">Chats answered by AI vs sales team</p>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={ANALYTICS_LEADS_OVER_TIME}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="aiHandled" name="AI Handled" stackId="a" fill="#059669" />
+                    <Bar dataKey="humanHandled" name="Human Handled" stackId="a" fill="#334155" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h2 className="text-sm font-bold text-slate-900">Where Leads Come From</h2>
+              <p className="text-xs text-slate-500 mb-4">Leads and won deals by source</p>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={ANALYTICS_LEAD_SOURCES}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="source" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="leads" name="Inbound Leads" fill="#64748b" />
+                    <Bar dataKey="won" name="Deals Won" fill="#0f172a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h2 className="text-sm font-bold text-slate-900">Conversion Trend (%)</h2>
+              <p className="text-xs text-slate-500 mb-4">Percentage of leads won over time</p>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={ANALYTICS_LEADS_OVER_TIME}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} unit="%" />
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="conversionRate"
+                      name="Conversion %"
+                      stroke="#059669"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

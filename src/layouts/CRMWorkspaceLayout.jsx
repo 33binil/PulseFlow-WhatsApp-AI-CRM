@@ -217,7 +217,7 @@ export const CRMWorkspaceLayout = ({ children }) => {
   }, [quickQuery, leads, contacts, strategicFindings]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col">
+    <div className="h-screen overflow-hidden bg-[#F8FAFC] text-slate-900 flex flex-col">
       {/* 3-Zone Top Bar Contract */}
       <header className="bg-white border-b border-slate-200 px-4 lg:px-6 h-14 flex items-center justify-between sticky top-0 z-30">
         {/* Zone 1: Single text element wordmark */}
@@ -373,12 +373,12 @@ export const CRMWorkspaceLayout = ({ children }) => {
         </div>
       </header>
 
-      <div className="flex-1 flex relative">
+      <div className="flex-1 flex relative min-h-0 overflow-hidden">
         {/* Clean, Friendly & Self-Explanatory Sidebar Navigation */}
         <aside
           className={`${
             mobileMenuOpen ? 'fixed inset-y-0 left-0 z-40 w-64 shadow-2xl' : 'hidden'
-          } lg:static lg:block lg:w-64 bg-white border-r border-slate-200 shrink-0 flex flex-col justify-between p-4`}
+          } lg:static lg:block lg:w-64 bg-white border-r border-slate-200 shrink-0 flex flex-col justify-between p-4 h-full min-h-0 overflow-y-auto overscroll-contain`}
         >
           <div className="space-y-6">
             {/* Simple Daily Menu */}
@@ -544,7 +544,9 @@ export const CRMWorkspaceLayout = ({ children }) => {
         </aside>
 
         {/* Main Viewport */}
-        <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
 
       {/* "How It Works" Simple 3-Step Guide Modal */}

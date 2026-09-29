@@ -289,13 +289,41 @@ export const AnalyticsPage = () => {
   const { leads, conversations, teamMembers } = useCRM();
   const [timeframe, setTimeframe] = useState('30D');
 
+  const dynamicLeadsOverTime =
+    ANALYTICS_LEADS_OVER_TIME.length > 0
+      ? ANALYTICS_LEADS_OVER_TIME
+      : [
+          {
+            date: new Date().toISOString().slice(5, 10),
+            totalLeads: leads.length,
+            hotLeads: leads.filter((l) => l.leadType === 'HOT').length
+          }
+        ];
+
+  const sourceMap = leads.reduce((acc, l) => {
+    const src = l.source || 'WhatsApp Inbound';
+    if (!acc[src]) acc[src] = { source: src, leads: 0, won: 0, totalScore: 0 };
+    acc[src].leads += 1;
+    if (l.leadStatus === 'WON') acc[src].won += 1;
+    acc[src].totalScore += l.leadScore || 0;
+    return acc;
+  }, {});
+
+  const dynamicLeadSources =
+    ANALYTICS_LEAD_SOURCES.length > 0
+      ? ANALYTICS_LEAD_SOURCES
+      : Object.values(sourceMap).map((s) => ({
+          source: s.source,
+          leads: s.leads,
+          won: s.won,
+          avgScore: Math.round(s.totalScore / Math.max(1, s.leads))
+        }));
+
   const intentBreakdown = [
-    { intent: 'pricing_enquiry', count: 68, avgScore: 82 },
-    { intent: 'service_enquiry', count: 54, avgScore: 64 },
-    { intent: 'request_for_quotation', count: 39, avgScore: 89 },
-    { intent: 'purchase_intent', count: 27, avgScore: 93 },
-    { intent: 'human_request', count: 14, avgScore: 79 },
-    { intent: 'general_enquiry', count: 32, avgScore: 28 }
+    { intent: 'pricing_enquiry', count: leads.filter((l) => l.budget !== 'Not disclosed').length, avgScore: 82 },
+    { intent: 'service_enquiry', count: leads.length, avgScore: 68 },
+    { intent: 'purchase_intent', count: leads.filter((l) => l.purchaseIntent).length, avgScore: 91 },
+    { intent: 'human_request', count: conversations.filter((c) => c.needsHumanAttention).length, avgScore: 80 }
   ];
 
   return (
@@ -373,7 +401,7 @@ export const AnalyticsPage = () => {
           </p>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ANALYTICS_LEADS_OVER_TIME}>
+              <AreaChart data={dynamicLeadsOverTime}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
@@ -434,7 +462,7 @@ export const AnalyticsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {ANALYTICS_LEAD_SOURCES.map((src) => (
+              {dynamicLeadSources.map((src) => (
                 <tr key={src.source}>
                   <td className="py-2.5 px-2 font-medium text-slate-900">{src.source}</td>
                   <td className="py-2.5 px-2 text-right font-mono tabular-nums">{src.leads}</td>

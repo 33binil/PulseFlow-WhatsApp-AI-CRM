@@ -1,39 +1,31 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import {
   INITIAL_TEAM_MEMBERS,
-  INITIAL_CONTACTS,
-  INITIAL_LEADS,
-  INITIAL_CONVERSATIONS,
-  INITIAL_MESSAGES,
-  INITIAL_FOLLOW_UPS,
-  INITIAL_KNOWLEDGE_BASE,
-  INITIAL_KNOWLEDGE_GAPS,
-  INITIAL_STRATEGIC_FINDINGS,
   INITIAL_AI_SETTINGS,
   INITIAL_WHATSAPP_SETTINGS,
-  INITIAL_COMPANY_SETTINGS,
-  INITIAL_NOTIFICATIONS
+  INITIAL_COMPANY_SETTINGS
 } from '../data/mockCrmData';
 
 const CRMContext = createContext(undefined);
 
 export const CRMProvider = ({ children }) => {
+  const [isLoading, setIsLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState(INITIAL_TEAM_MEMBERS);
   const [currentUser, setCurrentUser] = useState(INITIAL_TEAM_MEMBERS[0]);
   const [isAuthenticated, setIsAuthenticated] = useState(true);
 
-  const [contacts, setContacts] = useState(INITIAL_CONTACTS);
-  const [leads, setLeads] = useState(INITIAL_LEADS);
-  const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS);
-  const [messagesByConv, setMessagesByConv] = useState(INITIAL_MESSAGES);
-  const [followUps, setFollowUps] = useState(INITIAL_FOLLOW_UPS);
-  const [knowledgeBase, setKnowledgeBase] = useState(INITIAL_KNOWLEDGE_BASE);
-  const [knowledgeGaps, setKnowledgeGaps] = useState(INITIAL_KNOWLEDGE_GAPS);
-  const [strategicFindings] = useState(INITIAL_STRATEGIC_FINDINGS);
+  const [contacts, setContacts] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [messagesByConv, setMessagesByConv] = useState({});
+  const [followUps, setFollowUps] = useState([]);
+  const [knowledgeBase, setKnowledgeBase] = useState([]);
+  const [knowledgeGaps, setKnowledgeGaps] = useState([]);
+  const [strategicFindings, setStrategicFindings] = useState([]);
   const [aiSettings, setAISettings] = useState(INITIAL_AI_SETTINGS);
   const [whatsappSettings, setWhatsAppSettings] = useState(INITIAL_WHATSAPP_SETTINGS);
   const [companySettings, setCompanySettings] = useState(INITIAL_COMPANY_SETTINGS);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
 
   const pushToast = useCallback((title, description, variant = 'default') => {
@@ -48,9 +40,55 @@ export const CRMProvider = ({ children }) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const fetchCRMData = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    try {
+      const res = await fetch('/api/bootstrap');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
+        setTeamMembers(data.teamMembers);
+        setCurrentUser((prev) => {
+          const found = data.teamMembers.find((m) => m.id === prev?.id);
+          return found || data.teamMembers[0];
+        });
+      }
+      if (Array.isArray(data.contacts)) setContacts(data.contacts);
+      if (Array.isArray(data.leads)) setLeads(data.leads);
+      if (Array.isArray(data.conversations)) setConversations(data.conversations);
+      if (data.messagesByConv && typeof data.messagesByConv === 'object') {
+        setMessagesByConv(data.messagesByConv);
+      }
+      if (Array.isArray(data.followUps)) setFollowUps(data.followUps);
+      if (Array.isArray(data.knowledgeBase)) setKnowledgeBase(data.knowledgeBase);
+      if (Array.isArray(data.knowledgeGaps)) setKnowledgeGaps(data.knowledgeGaps);
+      if (Array.isArray(data.strategicFindings)) setStrategicFindings(data.strategicFindings);
+      if (data.aiSettings) setAISettings(data.aiSettings);
+      if (data.whatsappSettings) setWhatsAppSettings(data.whatsappSettings);
+      if (data.companySettings) setCompanySettings(data.companySettings);
+      if (Array.isArray(data.notifications)) setNotifications(data.notifications);
+    } catch (err) {
+      console.error('[CRMContext] Failed to load CRM state from database:', err);
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCRMData(false);
+    // Poll every 6 seconds so incoming real Meta WhatsApp webhook messages appear live
+    const interval = setInterval(() => {
+      fetchCRMData(true);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [fetchCRMData]);
+
   const loginAsRole = (role, email) => {
     const matched =
-      teamMembers.find((m) => (email ? m.email.toLowerCase() === email.toLowerCase() : m.role === role)) ||
+      teamMembers.find((m) =>
+        email ? m.email.toLowerCase() === email.toLowerCase() : m.role === role
+      ) ||
       teamMembers.find((m) => m.role === role) ||
       teamMembers[0];
     setCurrentUser(matched);
@@ -65,41 +103,60 @@ export const CRMProvider = ({ children }) => {
 
   const switchRole = (role) => {
     const matched = teamMembers.find((m) => m.role === role) || teamMembers[0];
-    setCurrentUser(matched);
-    pushToast(`Switched Active Role to ${role}`, `Now viewing CRM as ${matched.name} (${matched.role})`);
+    setCurrentUser({ ...matched, role });
+    pushToast(
+      `Switched Active Role to ${role}`,
+      `Now viewing CRM as ${matched.name} (${role})`
+    );
   };
 
-  // Team CRUD
+  // Team CRUD (Persisted to MongoDB)
   const addTeamMember = (member) => {
     const newMember = {
       ...member,
       id: `usr-${Date.now()}`,
       assignedLeadsCount: 0,
       activeChatsCount: 0,
-      lastLoginAt: 'Never'
+      lastLoginAt: 'Never',
+      conversionRate: 0,
+      avgResponseTime: '—'
     };
     setTeamMembers((prev) => [...prev, newMember]);
-    pushToast('Team Member Added', `${member.name} (${member.role}) invited.`, 'success');
+    fetch('/api/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMember)
+    }).catch((err) => console.error('Failed to save team member:', err));
+    pushToast('Team Member Added', `${member.name} (${member.role}) saved to database.`, 'success');
+    return newMember;
   };
 
   const updateTeamMember = (id, patch) => {
     setTeamMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-    if (currentUser.id === id) {
+    if (currentUser?.id === id) {
       setCurrentUser((prev) => ({ ...prev, ...patch }));
     }
-    pushToast('User Profile Updated', 'Changes saved.', 'success');
+    fetch(`/api/team/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to update team member:', err));
+    pushToast('User Profile Updated', 'Changes saved to database.', 'success');
   };
 
   const deleteTeamMember = (id) => {
     setTeamMembers((prev) => prev.filter((m) => m.id !== id));
-    pushToast('Team Member Removed', 'User account removed.', 'warning');
+    fetch(`/api/team/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete team member:', err)
+    );
+    pushToast('Team Member Removed', 'User account removed from database.', 'warning');
   };
 
-  // Contacts CRUD
+  // Contacts CRUD (Persisted to MongoDB)
   const addContact = (contact) => {
     const created = {
       ...contact,
-      id: `cnt-${Date.now()}`,
+      id: `cnt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       createdAt: new Date().toISOString().slice(0, 10),
       lastInteractionAt: 'Just now',
       totalConversations: 1,
@@ -107,18 +164,55 @@ export const CRMProvider = ({ children }) => {
       notes: []
     };
     setContacts((prev) => [created, ...prev]);
-    pushToast('Contact Created', `${created.name} added to CRM directory.`, 'success');
+
+    fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...created,
+        assignedAgentId: currentUser?.id || 'admin-1'
+      })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.conversation) {
+          setConversations((prev) => {
+            if (prev.some((c) => c.id === data.conversation.id || c.contactId === created.id)) {
+              return prev;
+            }
+            return [data.conversation, ...prev];
+          });
+          setMessagesByConv((prev) => ({
+            ...prev,
+            [data.conversation.id]: prev[data.conversation.id] || []
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to save contact:', err));
+
+    pushToast('Contact Created', `${created.name} saved to database.`, 'success');
     return created;
   };
 
   const updateContact = (id, patch) => {
     setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    pushToast('Contact Updated', 'Customer details saved.', 'success');
+    fetch(`/api/contacts/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to update contact:', err));
+    pushToast('Contact Updated', 'Customer details saved to database.', 'success');
   };
 
   const deleteContact = (id) => {
     setContacts((prev) => prev.filter((c) => c.id !== id));
-    pushToast('Contact Deleted', 'Contact removed from directory.', 'warning');
+    setLeads((prev) => prev.filter((l) => l.contactId !== id));
+    setConversations((prev) => prev.filter((c) => c.contactId !== id));
+    setFollowUps((prev) => prev.filter((f) => f.contactId !== id));
+    fetch(`/api/contacts/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete contact:', err)
+    );
+    pushToast('Contact Deleted', 'Contact removed from database.', 'warning');
   };
 
   const addContactNote = (contactId, content) => {
@@ -126,27 +220,32 @@ export const CRMProvider = ({ children }) => {
     const note = {
       id: `cn-${Date.now()}`,
       content: content.trim(),
-      authorName: currentUser.name,
+      authorName: currentUser?.name || 'Admin',
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, notes: [note, ...c.notes] } : c))
+      prev.map((c) => (c.id === contactId ? { ...c, notes: [note, ...(c.notes || [])] } : c))
     );
-    pushToast('Note Added', 'Saved to contact timeline.', 'success');
+    fetch(`/api/contacts/${contactId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content.trim(), authorName: currentUser?.name || 'Admin' })
+    }).catch((err) => console.error('Failed to add contact note:', err));
+    pushToast('Note Added', 'Saved to contact timeline in database.', 'success');
   };
 
-  // Leads CRUD
+  // Leads CRUD (Persisted to MongoDB)
   const addLead = (lead) => {
-    const numericVal = parseInt(String(lead.budget).replace(/[^0-9]/g, ''), 10) || 75000;
+    const numericVal = parseInt(String(lead.budget).replace(/[^0-9]/g, ''), 10) || 0;
     const newLead = {
       ...lead,
-      id: `ld-${Date.now()}`,
+      id: `ld-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       scoreBreakdown: lead.scoreBreakdown || {
-        budgetReadiness: Math.min(25, Math.round(lead.leadScore * 0.25)),
-        needSpecificity: Math.min(25, Math.round(lead.leadScore * 0.25)),
-        timelineUrgency: Math.min(20, Math.round(lead.leadScore * 0.2)),
-        decisionAuthority: Math.min(15, Math.round(lead.leadScore * 0.15)),
-        engagementDepth: Math.min(15, Math.round(lead.leadScore * 0.15))
+        budgetReadiness: Math.min(25, Math.round((lead.leadScore || 75) * 0.25)),
+        needSpecificity: Math.min(25, Math.round((lead.leadScore || 75) * 0.25)),
+        timelineUrgency: Math.min(20, Math.round((lead.leadScore || 75) * 0.2)),
+        decisionAuthority: Math.min(15, Math.round((lead.leadScore || 75) * 0.15)),
+        engagementDepth: Math.min(15, Math.round((lead.leadScore || 75) * 0.15))
       },
       estimatedValueInr: lead.estimatedValueInr ?? numericVal,
       buyingSignals: lead.buyingSignals || ['Inbound inquiry logged with active service requirement'],
@@ -160,7 +259,39 @@ export const CRMProvider = ({ children }) => {
       notes: []
     };
     setLeads((prev) => [newLead, ...prev]);
-    pushToast('Lead Created', `Qualified as ${newLead.leadType} (Score: ${newLead.leadScore}).`, 'success');
+
+    fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLead)
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.lead) {
+          setLeads((prev) => prev.map((l) => (l.id === newLead.id ? data.lead : l)));
+        }
+        if (data?.conversation) {
+          setConversations((prev) => {
+            const exists = prev.some((c) => c.id === data.conversation.id);
+            if (exists) {
+              return prev.map((c) => (c.id === data.conversation.id ? data.conversation : c));
+            }
+            return [data.conversation, ...prev];
+          });
+          setMessagesByConv((prev) => ({
+            ...prev,
+            [data.conversation.id]: prev[data.conversation.id] || []
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to save lead:', err));
+
+    pushToast(
+      'Lead Created',
+      `Qualified as ${newLead.leadType} (Score: ${newLead.leadScore}) and saved to database.`,
+      'success'
+    );
+    return newLead;
   };
 
   const updateLead = (id, patch) => {
@@ -171,12 +302,21 @@ export const CRMProvider = ({ children }) => {
           : l
       )
     );
-    pushToast('Lead Updated', 'Pipeline state updated.', 'success');
+    fetch(`/api/leads/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to update lead:', err));
+    pushToast('Lead Updated', 'Pipeline state updated in database.', 'success');
   };
 
   const deleteLead = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
-    pushToast('Lead Deleted', 'Lead removed from pipeline.', 'warning');
+    setFollowUps((prev) => prev.filter((f) => f.leadId !== id));
+    fetch(`/api/leads/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete lead:', err)
+    );
+    pushToast('Lead Deleted', 'Lead removed from database.', 'warning');
   };
 
   const addLeadNote = (leadId, content) => {
@@ -184,337 +324,242 @@ export const CRMProvider = ({ children }) => {
     const note = {
       id: `ln-${Date.now()}`,
       content: content.trim(),
-      authorName: currentUser.name,
+      authorName: currentUser?.name || 'Admin',
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, notes: [note, ...l.notes] } : l))
+      prev.map((l) => (l.id === leadId ? { ...l, notes: [note, ...(l.notes || [])] } : l))
     );
-    pushToast('Lead Note Added', 'Note saved to lead record.', 'success');
+    fetch(`/api/leads/${leadId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content.trim(), authorName: currentUser?.name || 'Admin' })
+    }).catch((err) => console.error('Failed to add lead note:', err));
+    pushToast('Lead Note Added', 'Note saved to lead record in database.', 'success');
   };
 
-  // Conversations & WhatsApp Inbox Actions
+  // Conversations & WhatsApp Inbox Actions (Persisted to MongoDB)
   const markConversationRead = (conversationId) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
     );
+    fetch(`/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch: { unreadCount: 0 } })
+    }).catch(() => {});
   };
 
   const takeOverConversation = (conversationId) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? {
-            ...c,
-            aiEnabled: false,
-            needsHumanAttention: false,
-            status: 'HUMAN_HANDOFF'
-          }
-          : c
-      )
-    );
-    const sysMsg = {
-      id: `msg-sys-${Date.now()}`,
-      conversationId,
-      whatsappMessageId: `sys.${Date.now()}`,
-      senderType: 'SYSTEM',
-      senderName: 'System',
-      content: `${currentUser.name} (${currentUser.role}) took over the conversation. AI auto-replies are paused.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      deliveryStatus: 'READ'
+    const patch = {
+      aiEnabled: false,
+      needsHumanAttention: false,
+      status: 'HUMAN_HANDOFF'
     };
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] || []), sysMsg]
-    }));
-    pushToast('Conversation Taken Over', 'AI replies paused. You are now chatting directly with the customer.', 'warning');
+    const sysText = `${currentUser?.name || 'Agent'} (${
+      currentUser?.role || 'ADMIN'
+    }) took over the conversation. AI auto-replies are paused.`;
+
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, ...patch } : c))
+    );
+
+    fetch(`/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch, systemMessage: sysText })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.systemMessage) {
+          setMessagesByConv((prev) => ({
+            ...prev,
+            [conversationId]: [...(prev[conversationId] || []), data.systemMessage]
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to take over conversation:', err));
+
+    pushToast(
+      'Conversation Taken Over',
+      'AI replies paused. You are now chatting directly with the customer.',
+      'warning'
+    );
   };
 
   const returnConversationToAI = (conversationId) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? {
-            ...c,
-            aiEnabled: true,
-            needsHumanAttention: false,
-            handoffReason: undefined,
-            status: 'OPEN'
-          }
-          : c
-      )
-    );
-    const sysMsg = {
-      id: `msg-sys-${Date.now()}`,
-      conversationId,
-      whatsappMessageId: `sys.${Date.now()}`,
-      senderType: 'SYSTEM',
-      senderName: 'System',
-      content: `${currentUser.name} returned the conversation to PulseFlow AI Assistant. Automated AI replies are active.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      deliveryStatus: 'READ'
+    const patch = {
+      aiEnabled: true,
+      needsHumanAttention: false,
+      handoffReason: '',
+      status: 'OPEN'
     };
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] || []), sysMsg]
-    }));
-    pushToast('Returned to AI Assistant', 'AI auto-reply engine re-enabled for this thread.', 'success');
+    const sysText = `${
+      currentUser?.name || 'Agent'
+    } returned the conversation to PulseFlow AI Assistant. Automated AI replies are active.`;
+
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, ...patch } : c))
+    );
+
+    fetch(`/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch, systemMessage: sysText })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.systemMessage) {
+          setMessagesByConv((prev) => ({
+            ...prev,
+            [conversationId]: [...(prev[conversationId] || []), data.systemMessage]
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to return conversation to AI:', err));
+
+    pushToast(
+      'Returned to AI Assistant',
+      'AI auto-reply engine re-enabled for this thread.',
+      'success'
+    );
   };
 
   const sendAgentMessage = (conversationId, content) => {
     if (!content.trim()) return;
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newMsg = {
-      id: `msg-${Date.now()}`,
+    const tempId = `msg-temp-${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
       conversationId,
       whatsappMessageId: `wamid.agent.${Date.now()}`,
       senderType: 'HUMAN_AGENT',
-      senderName: currentUser.name,
+      senderName: currentUser?.name || 'Agent',
       content: content.trim(),
       timestamp: nowStr,
-      deliveryStatus: 'DELIVERED'
+      deliveryStatus: 'SENT'
     };
+
     setMessagesByConv((prev) => ({
       ...prev,
-      [conversationId]: [...(prev[conversationId] || []), newMsg]
+      [conversationId]: [...(prev[conversationId] || []), optimisticMsg]
     }));
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
           ? {
-            ...c,
-            lastMessage: content.trim(),
-            lastMessageTime: nowStr,
-            unreadCount: 0,
-            needsHumanAttention: false
-          }
-          : c
-      )
-    );
-  };
-
-  const simulateCustomerIncomingMessage = (conversationId, content, languageHint) => {
-    const conv = conversations.find((c) => c.id === conversationId);
-    if (!conv || !content.trim()) return;
-    const contact = contacts.find((cnt) => cnt.id === conv.contactId);
-    const lead = leads.find((ld) => ld.id === conv.leadId);
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const customerMsg = {
-      id: `msg-cust-${Date.now()}`,
-      conversationId,
-      whatsappMessageId: `wamid.inbound.${Date.now()}`,
-      senderType: 'CUSTOMER',
-      senderName: contact?.name || 'Customer',
-      content: content.trim(),
-      timestamp: nowStr,
-      deliveryStatus: 'READ'
-    };
-
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] || []), customerMsg]
-    }));
-
-    const lower = content.toLowerCase();
-    const asksForHuman =
-      lower.includes('human') ||
-      lower.includes('manager') ||
-      lower.includes('agent') ||
-      lower.includes('complaint') ||
-      lower.includes('refund');
-
-    if (!conv.aiEnabled || !aiSettings.aiEnabled || !aiSettings.autoReplyEnabled) {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId
-            ? {
               ...c,
               lastMessage: content.trim(),
               lastMessageTime: nowStr,
-              unreadCount: c.unreadCount + 1
+              unreadCount: 0,
+              needsHumanAttention: false
             }
-            : c
-        )
-      );
-      pushToast('Incoming WhatsApp Message', `${contact?.name}: "${content.slice(0, 48)}..."`);
-      return;
-    }
-
-    const isManglish =
-      languageHint === 'Manglish' ||
-      lower.includes('aanu') ||
-      lower.includes('undakkanam') ||
-      lower.includes('ethra') ||
-      lower.includes('pattuo') ||
-      lower.includes('cheyyan');
-    const isMalayalam = languageHint === 'Malayalam' || /[\u0D00-\u0D7F]/.test(content);
-
-    let aiStructured;
-
-    if (asksForHuman) {
-      aiStructured = {
-        reply: isManglish
-          ? `Theerchayayum ${contact?.name || ''}! Nammude senior manager-ne njan ippo thanne ee chat-ilekku connect cheyyunnu. Avar udane reply tharum.`
-          : `I understand, ${contact?.name || 'there'}. I have immediately escalated your conversation to our senior account manager so they can assist you personally. They will reply right here shortly.`,
-        intent: 'human_request',
-        service: lead?.interestedService || 'general_consultation',
-        leadType: lead?.leadType || 'HOT',
-        leadScore: Math.max(lead?.leadScore || 75, 82),
-        budget: lead?.budget || 'To be discussed with manager',
-        timeline: 'Immediate escalation',
-        requirements: [...(lead?.requirements || []), 'Requested human manager assistance'],
-        summary: `Customer requested direct human/manager intervention: "${content.trim()}"`,
-        needsHuman: true,
-        confidence: 0.95
-      };
-    } else if (isManglish) {
-      aiStructured = {
-        reply:
-          'Sure! Website & E-Commerce development nammude core service aanu. Basic website ₹35,000 muthalum, Full E-Commerce with payment gateway ₹75,000–₹1,00,000 range-ilum cheythu tharam. Ningalude expected timeline and core features onnu parayamo?',
-        intent: 'pricing_enquiry',
-        service: 'web_development',
-        leadType: 'HOT',
-        leadScore: 91,
-        budget: lower.includes('100000') || lower.includes('1 lakh') ? '₹1,00,000' : lead?.budget || '₹75,000 - ₹1,00,000',
-        timeline: lower.includes('next month') ? 'Next month' : lead?.timeline || 'Within 1 month',
-        requirements: Array.from(new Set([...(lead?.requirements || []), 'Custom Website / E-Commerce'])),
-        summary: 'Customer inquired in Manglish about website pricing and development timeline; high qualification score.',
-        needsHuman: false,
-        confidence: 0.94
-      };
-    } else if (isMalayalam) {
-      aiStructured = {
-        reply:
-          'തീർച്ചയായും! ഞങ്ങളുടെ വെബ്സൈറ്റ് വികസനവും ഡിജിറ്റൽ മാർക്കറ്റിംഗ് പാക്കേജുകളും നിങ്ങളുടെ ബിസിനസ് ആവശ്യങ്ങൾക്കനുസരിച്ച് കസ്റ്റമൈസ് ചെയ്യാവുന്നതാണ്. കൂടുതൽ വിവരങ്ങൾക്കായി ഇന്ന് ഒരു ചെറിയ കോൾ ഷെഡ്യൂൾ ചെയ്യട്ടെ?',
-        intent: 'service_enquiry',
-        service: 'digital_marketing',
-        leadType: 'WARM',
-        leadScore: 68,
-        budget: lead?.budget || '₹20,000 / month',
-        timeline: lead?.timeline || 'This month',
-        requirements: Array.from(new Set([...(lead?.requirements || []), 'Malayalam Consultation'])),
-        summary: 'Customer inquired in Malayalam about customized packages and consultation.',
-        needsHuman: false,
-        confidence: 0.92
-      };
-    } else {
-      aiStructured = {
-        reply: `Thank you for your message, ${contact?.name?.split(' ')[0] || 'there'
-          }! Based on our company pricing knowledge base, we can deliver your project with a 40/40/20 milestone structure and 90-day warranty. Would you like us to share a formal quotation PDF for your budget and timeline?`,
-        intent: 'request_for_quotation',
-        service: lead?.interestedService || 'web_development',
-        leadType: 'HOT',
-        leadScore: Math.min(98, (lead?.leadScore || 70) + 8),
-        budget: lead?.budget || '₹1,00,000+',
-        timeline: lead?.timeline || 'Next month',
-        requirements: Array.from(new Set([...(lead?.requirements || []), 'Formal Quotation Requested'])),
-        summary: `Customer followed up with: "${content.trim()}". High buying intent confirmed by AI.`,
-        needsHuman: false,
-        confidence: 0.94
-      };
-    }
-
-    const aiMsg = {
-      id: `msg-ai-${Date.now() + 1}`,
-      conversationId,
-      whatsappMessageId: `wamid.ai.${Date.now() + 1}`,
-      senderType: 'AI',
-      senderName: 'PulseFlow AI Assistant',
-      content: aiStructured.reply,
-      timestamp: nowStr,
-      deliveryStatus: 'DELIVERED',
-      aiMetadata: aiStructured
-    };
-
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] || []), aiMsg]
-    }));
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? {
-            ...c,
-            lastMessage: aiStructured.reply,
-            lastMessageTime: nowStr,
-            aiEnabled: !aiStructured.needsHuman,
-            needsHumanAttention: aiStructured.needsHuman,
-            status: aiStructured.needsHuman ? 'HUMAN_HANDOFF' : 'OPEN',
-            keyFinding: aiStructured.summary,
-            handoffReason: aiStructured.needsHuman
-              ? 'Customer requested human/manager intervention'
-              : undefined
-          }
           : c
       )
     );
 
-    if (lead) {
-      setLeads((prev) =>
-        prev.map((l) =>
-          l.id === lead.id
-            ? {
-              ...l,
-              leadScore: aiStructured.leadScore,
-              leadType: aiStructured.leadType,
-              budget: aiStructured.budget,
-              timeline: aiStructured.timeline,
-              requirements: aiStructured.requirements,
-              buyingSignals: Array.from(
-                new Set([
-                  ...l.buyingSignals,
-                  `Latest AI Intent: ${aiStructured.intent} (${Math.round(aiStructured.confidence * 100)}% confidence)`
-                ])
-              ),
-              aiSummary: aiStructured.summary,
-              lastInteractionAt: 'Just now'
-            }
-            : l
-        )
-      );
-    }
+    fetch(`/api/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: content.trim(),
+        senderName: currentUser?.name || 'Agent'
+      })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.message) {
+          setMessagesByConv((prev) => ({
+            ...prev,
+            [conversationId]: (prev[conversationId] || []).map((m) =>
+              m.id === tempId ? data.message : m
+            )
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to send message:', err));
+  };
 
-    if (aiStructured.needsHuman) {
-      const newNotif = {
-        id: `notif-${Date.now()}`,
-        type: 'HUMAN_ATTENTION',
-        title: 'Human Handoff Triggered by AI',
-        message: `${contact?.name} requires human assistance. Auto-reply paused.`,
-        createdAt: 'Just now',
-        isRead: false,
-        linkTo: `/inbox?convId=${conversationId}`
-      };
-      setNotifications((prev) => [newNotif, ...prev]);
-      pushToast('Human Handoff Triggered!', `${contact?.name} escalated to Human Agent.`, 'danger');
-    } else {
-      pushToast(
-        'AI Auto-Replied & Updated Findings',
-        `Intent: ${aiStructured.intent} · Score: ${aiStructured.leadScore}/100 (${aiStructured.leadType})`,
-        'success'
-      );
+  const simulateCustomerIncomingMessage = async (conversationId, content, languageHint) => {
+    if (!conversationId || !content.trim()) return;
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/incoming`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content.trim(), languageHint })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      setMessagesByConv((prev) => {
+        const list = [...(prev[conversationId] || [])];
+        if (data.customerMsg) list.push(data.customerMsg);
+        if (data.aiMsg) list.push(data.aiMsg);
+        return { ...prev, [conversationId]: list };
+      });
+
+      if (data.conversation) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conversationId ? data.conversation : c))
+        );
+      }
+
+      if (data.lead) {
+        setLeads((prev) => prev.map((l) => (l.id === data.lead.id ? data.lead : l)));
+      }
+
+      if (data.aiStructured?.needsHuman) {
+        pushToast(
+          'Human Handoff Triggered!',
+          'Customer escalated to Human Agent.',
+          'danger'
+        );
+      } else if (data.aiStructured) {
+        pushToast(
+          'AI Auto-Replied & Saved to DB',
+          `Intent: ${data.aiStructured.intent} · Score: ${data.aiStructured.leadScore}/100 (${data.aiStructured.leadType})`,
+          'success'
+        );
+      } else {
+        pushToast('Incoming WhatsApp Message Saved', content.slice(0, 48));
+      }
+    } catch (err) {
+      console.error('Failed to process incoming message:', err);
+      pushToast('Error', 'Could not process incoming message.', 'danger');
     }
   };
 
-  // Follow-ups CRUD
+  // Follow-ups CRUD (Persisted to MongoDB)
   const addFollowUp = (fu) => {
     const created = { ...fu, id: `fu-${Date.now()}` };
     setFollowUps((prev) => [created, ...prev]);
-    pushToast('Follow-up Scheduled', `Scheduled for ${fu.date} at ${fu.time}.`, 'success');
+    fetch('/api/follow-ups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(created)
+    }).catch((err) => console.error('Failed to save follow-up:', err));
+    pushToast('Follow-up Scheduled', `Saved for ${fu.date} at ${fu.time}.`, 'success');
   };
 
   const updateFollowUpStatus = (id, status) => {
     setFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+    fetch(`/api/follow-ups/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    }).catch((err) => console.error('Failed to update follow-up:', err));
     pushToast('Follow-up Updated', `Status marked as ${status}.`, 'success');
   };
 
   const deleteFollowUp = (id) => {
     setFollowUps((prev) => prev.filter((f) => f.id !== id));
-    pushToast('Follow-up Removed', 'Task deleted.', 'warning');
+    fetch(`/api/follow-ups/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete follow-up:', err)
+    );
+    pushToast('Follow-up Removed', 'Task deleted from database.', 'warning');
   };
 
-  // Knowledge Base CRUD
+  // Knowledge Base CRUD (Persisted to MongoDB)
   const addKnowledgeArticle = (article) => {
     const created = {
       ...article,
@@ -523,7 +568,12 @@ export const CRMProvider = ({ children }) => {
       usageCount: 1
     };
     setKnowledgeBase((prev) => [created, ...prev]);
-    pushToast('Knowledge Entry Added', `"${created.title}" is now live for AI context.`, 'success');
+    fetch('/api/knowledge-base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(created)
+    }).catch((err) => console.error('Failed to add knowledge base entry:', err));
+    pushToast('Knowledge Entry Added', `"${created.title}" is now live in database for AI context.`, 'success');
   };
 
   const updateKnowledgeArticle = (id, patch) => {
@@ -532,65 +582,93 @@ export const CRMProvider = ({ children }) => {
         k.id === id ? { ...k, ...patch, updatedAt: new Date().toISOString().slice(0, 10) } : k
       )
     );
-    pushToast('Knowledge Base Updated', 'AI source-of-truth updated.', 'success');
+    fetch(`/api/knowledge-base/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to update knowledge base entry:', err));
+    pushToast('Knowledge Base Updated', 'AI source-of-truth updated in database.', 'success');
   };
 
   const deleteKnowledgeArticle = (id) => {
     setKnowledgeBase((prev) => prev.filter((k) => k.id !== id));
-    pushToast('Knowledge Entry Deleted', 'Removed from AI context.', 'warning');
+    fetch(`/api/knowledge-base/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete knowledge base entry:', err)
+    );
+    pushToast('Knowledge Entry Deleted', 'Removed from database.', 'warning');
   };
 
   const resolveKnowledgeGapToArticle = (gapId) => {
     const gap = knowledgeGaps.find((g) => g.id === gapId);
     if (!gap || gap.resolved) return;
-    const created = {
-      id: `kb-${Date.now()}`,
-      category: gap.suggestedCategory,
-      title: gap.suggestedTitle,
-      content: gap.suggestedContent,
-      keywords: gap.suggestedTitle.toLowerCase().split(/\s+/).slice(0, 5),
-      isActive: true,
-      updatedAt: new Date().toISOString().slice(0, 10),
-      usageCount: gap.occurrences
-    };
-    setKnowledgeBase((prev) => [created, ...prev]);
-    setKnowledgeGaps((prev) => prev.map((g) => (g.id === gapId ? { ...g, resolved: true } : g)));
+
+    fetch(`/api/knowledge-gaps/${gapId}/resolve`, { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.article) {
+          setKnowledgeBase((prev) => [data.article, ...prev]);
+        }
+        setKnowledgeGaps((prev) =>
+          prev.map((g) => (g.id === gapId ? { ...g, resolved: true } : g))
+        );
+      })
+      .catch((err) => console.error('Failed to resolve knowledge gap:', err));
+
     pushToast(
       'AI Knowledge Gap Resolved!',
-      `"${gap.suggestedTitle}" published to Knowledge Base. AI will now answer this automatically.`,
+      `"${gap.suggestedTitle}" published to Knowledge Base.`,
       'success'
     );
   };
 
-  // Settings
+  // Settings (Persisted to MongoDB)
   const updateAISettings = (patch) => {
     setAISettings((prev) => ({ ...prev, ...patch }));
-    pushToast('AI Settings Saved', 'AI reply engine configuration updated.', 'success');
+    fetch('/api/settings/aiSettings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to save AI settings:', err));
+    pushToast('AI Settings Saved', 'AI reply engine configuration updated in database.', 'success');
   };
 
   const updateWhatsAppSettings = (patch) => {
     setWhatsAppSettings((prev) => ({ ...prev, ...patch }));
-    pushToast('WhatsApp Settings Saved', 'Cloud API & Webhook settings updated.', 'success');
+    fetch('/api/settings/whatsappSettings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to save WhatsApp settings:', err));
+    pushToast('WhatsApp Settings Saved', 'Cloud API & Webhook settings saved in database.', 'success');
   };
 
   const updateCompanySettings = (patch) => {
     setCompanySettings((prev) => ({ ...prev, ...patch }));
-    pushToast('Company Settings Saved', 'Organization profile updated.', 'success');
+    fetch('/api/settings/companySettings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).catch((err) => console.error('Failed to save company settings:', err));
+    pushToast('Company Settings Saved', 'Organization profile saved in database.', 'success');
   };
 
-  // Notifications
+  // Notifications (Persisted to MongoDB)
   const markNotificationRead = (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    fetch(`/api/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
   };
 
   const markAllNotificationsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    fetch('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
     pushToast('Notifications Cleared', 'All notifications marked as read.');
   };
 
   return (
     <CRMContext.Provider
       value={{
+        isLoading,
+        refreshCRMData: fetchCRMData,
         currentUser,
         isAuthenticated,
         loginAsRole,

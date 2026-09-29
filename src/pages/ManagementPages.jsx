@@ -712,9 +712,48 @@ export const KnowledgeBasePage = () => {
 
 /* 4. WHATSAPP SETTINGS PAGE */
 export const WhatsAppSettingsPage = () => {
-  const { whatsappSettings, updateWhatsAppSettings } = useCRM();
-  const [form, setForm] = useState(whatsappSettings);
+  const { whatsappSettings, updateWhatsAppSettings, pushToast } = useCRM();
+  const [form, setForm] = useState({
+    ...whatsappSettings,
+    webhookUrl:
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/webhook`
+        : whatsappSettings.webhookUrl
+  });
   const [copied, setCopied] = useState(false);
+  const [liveStatus, setLiveStatus] = useState(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+
+  const checkLiveWhatsAppStatus = async (notify = false) => {
+    setCheckingStatus(true);
+    try {
+      const res = await fetch('/api/whatsapp/status');
+      const data = await res.json();
+      setLiveStatus(data);
+      if (data.displayPhoneNumber && !form.displayPhoneNumber) {
+        setForm((prev) => ({ ...prev, displayPhoneNumber: data.displayPhoneNumber }));
+      }
+      if (notify) {
+        if (data.cloudApiConnected) {
+          pushToast(
+            'WhatsApp Cloud API Connected',
+            `Verified: ${data.verifiedName || data.displayPhoneNumber || data.phoneNumberId}`,
+            'success'
+          );
+        } else {
+          pushToast('WhatsApp Token Expired / Error', data.error || 'Connection failed', 'danger');
+        }
+      }
+    } catch (err) {
+      setLiveStatus({ cloudApiConnected: false, error: err.message });
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  React.useEffect(() => {
+    checkLiveWhatsAppStatus(false);
+  }, []);
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
@@ -731,21 +770,68 @@ export const WhatsAppSettingsPage = () => {
           </div>
           <h1 className="text-xl font-bold text-slate-900 mt-0.5">WhatsApp Cloud API Settings</h1>
         </div>
-        <button
-          onClick={() => updateWhatsAppSettings(form)}
-          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 self-start"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>Save Configuration</span>
-        </button>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => checkLiveWhatsAppStatus(true)}
+            disabled={checkingStatus}
+            className="px-3.5 py-2 border border-slate-300 bg-white text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 cursor-pointer"
+          >
+            {checkingStatus ? 'Testing Meta API...' : 'Test Live Connection'}
+          </button>
+          <button
+            onClick={() => updateWhatsAppSettings(form)}
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save Configuration</span>
+          </button>
+        </div>
       </div>
+
+      {liveStatus && liveStatus.cloudApiConnected && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="font-bold">
+              Meta WhatsApp Cloud API Connected · {liveStatus.verifiedName || 'Verified Number'} ({liveStatus.displayPhoneNumber})
+            </div>
+            <div className="text-emerald-800 mt-0.5">
+              Phone Number ID: <code className="font-mono">{liveStatus.phoneNumberId}</code> · WABA ID: <code className="font-mono">{liveStatus.businessAccountId}</code> · Webhook Receiver Ready
+            </div>
+          </div>
+        </div>
+      )}
+
+      {liveStatus && !liveStatus.cloudApiConnected && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
+          <div className="font-bold">
+            Meta Cloud API Status: Access Token Expired (Webhook Receiver is Active)
+          </div>
+          <div className="font-mono text-[11px] text-amber-800">{liveStatus.error}</div>
+          <div className="text-amber-800 pt-1">
+            Your incoming webhook endpoint (<code className="font-mono">/webhook</code>) is online and verified, but your temporary 24-hour <code className="font-mono">WHATSAPP_ACCESS_TOKEN</code> from Meta Developer Console has expired. Generate a fresh token (or System User permanent token) in Meta App Dashboard to resume sending live outgoing WhatsApp messages.
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
         <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-200">
             <h2 className="text-sm font-bold text-slate-900">Webhook & Business Account Identifiers</h2>
-            <span className="text-emerald-700 font-semibold">
-              Connected · Last Event {form.lastWebhookAt}
+            <span
+              className={`font-semibold ${
+                liveStatus?.cloudApiConnected
+                  ? 'text-emerald-700'
+                  : liveStatus
+                  ? 'text-amber-700'
+                  : 'text-slate-500'
+              }`}
+            >
+              {liveStatus?.cloudApiConnected
+                ? `Cloud API Connected · ${liveStatus.displayPhoneNumber || form.lastWebhookAt}`
+                : liveStatus
+                ? 'Webhook Ready · Token Expired'
+                : 'Checking Meta API...'}
             </span>
           </div>
 

@@ -18,7 +18,9 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  MessageSquare
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
@@ -29,6 +31,9 @@ export const WhatsAppInboxPage = () => {
     leads,
     teamMembers,
     messagesByConv,
+    currentUser,
+    addContact,
+    addLead,
     sendAgentMessage,
     simulateCustomerIncomingMessage,
     takeOverConversation,
@@ -41,7 +46,7 @@ export const WhatsAppInboxPage = () => {
   } = useCRM();
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialConvId = searchParams.get('convId') || conversations[0]?.id || 'conv-1';
+  const initialConvId = searchParams.get('convId') || conversations[0]?.id || '';
 
   const [selectedConvId, setSelectedConvId] = useState(initialConvId);
   const [inboxFilter, setInboxFilter] = useState('ALL');
@@ -57,13 +62,52 @@ export const WhatsAppInboxPage = () => {
   const [followUpNote, setFollowUpNote] = useState('');
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
 
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatName, setNewChatName] = useState('');
+  const [newChatPhone, setNewChatPhone] = useState('+91 ');
+  const [newChatService, setNewChatService] = useState('Web Development');
+  const [newChatBudget, setNewChatBudget] = useState('₹50,000');
+
   useEffect(() => {
     const paramId = searchParams.get('convId');
     if (paramId && conversations.some((c) => c.id === paramId)) {
       setSelectedConvId(paramId);
       markConversationRead(paramId);
+    } else if (!selectedConvId && conversations[0]?.id) {
+      setSelectedConvId(conversations[0].id);
     }
-  }, [searchParams]);
+  }, [searchParams, conversations]);
+
+  const handleCreateNewChat = (e) => {
+    e.preventDefault();
+    if (!newChatName.trim() || !newChatPhone.trim()) return;
+    const createdContact = addContact({
+      name: newChatName.trim(),
+      phone: newChatPhone.trim(),
+      email: '',
+      company: 'Direct WhatsApp Inquiry',
+      location: '',
+      source: 'WhatsApp Inbound',
+      tags: ['WhatsApp Lead', newChatService]
+    });
+    addLead({
+      contactId: createdContact.id,
+      leadStatus: 'NEW',
+      leadType: 'WARM',
+      leadScore: 65,
+      interestedService: newChatService,
+      budget: newChatBudget,
+      timeline: 'This month',
+      requirements: [newChatService],
+      source: 'WhatsApp Inbound',
+      assignedAgentId: currentUser?.id || 'admin-1',
+      aiSummary: `WhatsApp chat started with ${newChatName.trim()} for ${newChatService}.`,
+      purchaseIntent: true
+    });
+    setNewChatName('');
+    setNewChatPhone('+91 ');
+    setShowNewChatModal(false);
+  };
 
   const handleSelectConversation = (convId) => {
     setSelectedConvId(convId);
@@ -143,7 +187,70 @@ export const WhatsAppInboxPage = () => {
   };
 
   if (!activeItem) {
-    return <div className="p-8 text-xs text-slate-500">No active conversations available.</div>;
+    return (
+      <div className="p-8 max-w-lg mx-auto my-12 bg-white border border-slate-200 rounded-xl space-y-4">
+        <div className="flex items-center gap-2 text-emerald-700 font-semibold text-xs">
+          <MessageSquare className="w-4 h-4" />
+          <span>WhatsApp Cloud API Connected</span>
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">
+          Start Your First Real WhatsApp Conversation
+        </h2>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          All dummy data has been removed. Incoming messages sent to your WhatsApp Business number will appear here automatically, or you can add a customer below to start a chat now.
+        </p>
+        <form onSubmit={handleCreateNewChat} className="space-y-3 text-xs pt-2">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Customer Name</label>
+            <input
+              type="text"
+              required
+              value={newChatName}
+              onChange={(e) => setNewChatName(e.target.value)}
+              placeholder="e.g., Akhil Thomas"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">WhatsApp Phone Number</label>
+            <input
+              type="text"
+              required
+              value={newChatPhone}
+              onChange={(e) => setNewChatPhone(e.target.value)}
+              placeholder="+91 98470 00000"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Interested Service</label>
+              <input
+                type="text"
+                value={newChatService}
+                onChange={(e) => setNewChatService(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Estimated Budget</label>
+              <input
+                type="text"
+                value={newChatBudget}
+                onChange={(e) => setNewChatBudget(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors cursor-pointer"
+          >
+            Add Customer & Open WhatsApp Chat
+          </button>
+        </form>
+      </div>
+    );
   }
 
   const { conv, contact, lead } = activeItem;
@@ -155,12 +262,17 @@ export const WhatsAppInboxPage = () => {
         <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-sm font-bold text-slate-900">WhatsApp Chats</h1>
+              <h1 className="text-sm font-bold text-slate-900">WhatsApp Chats ({filteredList.length})</h1>
               <p className="text-[11px] text-slate-500">Click a customer to read or reply</p>
             </div>
-            <span className="text-xs font-mono text-slate-500 tabular-nums">
-              {filteredList.length} chats
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowNewChatModal(true)}
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>New Chat</span>
+            </button>
           </div>
 
           <div className="relative">
@@ -949,6 +1061,89 @@ export const WhatsAppInboxPage = () => {
           </div>
         )}
       </div>
+
+      {/* Modal to Start a New WhatsApp Chat */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-sm font-bold text-slate-900">Start New WhatsApp Chat</h3>
+              <button
+                type="button"
+                onClick={() => setShowNewChatModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateNewChat} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Customer Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newChatName}
+                  onChange={(e) => setNewChatName(e.target.value)}
+                  placeholder="e.g., Akhil Thomas"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  WhatsApp Phone Number
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newChatPhone}
+                  onChange={(e) => setNewChatPhone(e.target.value)}
+                  placeholder="+91 98470 00000"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Interested Service
+                  </label>
+                  <input
+                    type="text"
+                    value={newChatService}
+                    onChange={(e) => setNewChatService(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Estimated Budget
+                  </label>
+                  <input
+                    type="text"
+                    value={newChatBudget}
+                    onChange={(e) => setNewChatBudget(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono"
+                  />
+                </div>
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewChatModal(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg cursor-pointer"
+                >
+                  Save & Open Chat
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

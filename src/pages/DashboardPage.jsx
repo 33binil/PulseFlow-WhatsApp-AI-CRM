@@ -79,6 +79,33 @@ export const DashboardPage = () => {
     { tier: 'UNQUALIFIED', count: unqualifiedLeads.length }
   ];
 
+  const dynamicLeadsOverTime =
+    ANALYTICS_LEADS_OVER_TIME.length > 0
+      ? ANALYTICS_LEADS_OVER_TIME
+      : [
+          {
+            date: new Date().toISOString().slice(5, 10),
+            totalLeads,
+            hotLeads: hotLeads.length,
+            aiHandled: aiHandledCount,
+            humanHandled: humanHandledCount,
+            conversionRate
+          }
+        ];
+
+  const sourceGroups = leads.reduce((acc, l) => {
+    const src = l.source || 'WhatsApp Inbound';
+    if (!acc[src]) acc[src] = { source: src, leads: 0, won: 0 };
+    acc[src].leads += 1;
+    if (l.leadStatus === 'WON') acc[src].won += 1;
+    return acc;
+  }, {});
+
+  const dynamicLeadSources =
+    ANALYTICS_LEAD_SOURCES.length > 0
+      ? ANALYTICS_LEAD_SOURCES
+      : Object.values(sourceGroups);
+
   const getContactName = (contactId) =>
     contacts.find((c) => c.id === contactId)?.name || 'Unknown Customer';
 
@@ -656,7 +683,7 @@ export const DashboardPage = () => {
               </p>
               <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={ANALYTICS_LEADS_OVER_TIME}>
+                  <AreaChart data={dynamicLeadsOverTime}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
@@ -706,7 +733,7 @@ export const DashboardPage = () => {
               <p className="text-xs text-slate-500 mb-4">Chats answered by AI vs sales team</p>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ANALYTICS_LEADS_OVER_TIME}>
+                  <BarChart data={dynamicLeadsOverTime}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
@@ -723,7 +750,7 @@ export const DashboardPage = () => {
               <p className="text-xs text-slate-500 mb-4">Leads and won deals by source</p>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ANALYTICS_LEAD_SOURCES}>
+                  <BarChart data={dynamicLeadSources}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="source" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 11 }} />
@@ -740,7 +767,7 @@ export const DashboardPage = () => {
               <p className="text-xs text-slate-500 mb-4">Percentage of leads won over time</p>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={ANALYTICS_LEADS_OVER_TIME}>
+                  <LineChart data={dynamicLeadsOverTime}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} unit="%" />

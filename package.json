@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "node server.js",
     "dev:server": "node --env-file=.env --watch server.js",
     "build": "vite build",
     "start": "node server.js",

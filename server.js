@@ -181,14 +181,37 @@ if (fs.existsSync(DIST_DIR)) {
   });
 }
 
+// Presence-only audit so Render misconfiguration is visible in the deploy log.
+// Never prints values. Only WEBHOOK_ENV_REQUIRED are needed for the live webhook;
+// the rest are reserved for the CRM features that will consume them.
+const WEBHOOK_ENV_REQUIRED = ['WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET'];
+const WEBHOOK_ENV_RESERVED = [
+  'WHATSAPP_ACCESS_TOKEN',
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_BUSINESS_ACCOUNT_ID',
+  'WHATSAPP_API_VERSION',
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'GEMINI_API_KEY',
+  'GEMINI_MODEL'
+];
+
 app.listen(PORT, () => {
   console.log(
     `[server] PulseFlow CRM listening on port ${PORT} (${IS_PRODUCTION ? 'production' : 'development'})`
   );
-  console.log(
-    `[server] webhook verify token configured: ${Boolean(VERIFY_TOKEN)} | app secret configured: ${Boolean(APP_SECRET)} | static build: ${fs.existsSync(DIST_DIR)}`
-  );
-  if (!VERIFY_TOKEN) {
-    console.warn('[server] WHATSAPP_VERIFY_TOKEN is not set — webhook verification will return 403');
+  console.log(`[server] static build served: ${fs.existsSync(DIST_DIR)}`);
+
+  const required = WEBHOOK_ENV_REQUIRED.map((n) => `${n}=${process.env[n] ? 'set' : 'MISSING'}`);
+  console.log(`[server] webhook env — ${required.join(' | ')}`);
+
+  const missingRequired = WEBHOOK_ENV_REQUIRED.filter((n) => !process.env[n]);
+  if (missingRequired.length) {
+    console.warn(
+      `[server] required for webhook but not set: ${missingRequired.join(', ')} — GET /webhook will reject Meta verification`
+    );
   }
+
+  const reserved = WEBHOOK_ENV_RESERVED.map((n) => `${n}=${process.env[n] ? 'set' : 'unset'}`);
+  console.log(`[server] reserved env — ${reserved.join(' | ')}`);
 });

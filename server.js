@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import mongoose, { connectDB } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -96,7 +97,14 @@ function extractEvents(payload) {
 }
 
 app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
+  const dbState = mongoose.connection.readyState;
+  const dbStatusMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  res.status(200).json({
+    status: 'ok',
+    uptime: Math.round(process.uptime()),
+    database: dbStatusMap[dbState] || 'unknown',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Meta webhook verification. Intentionally mounted at the root path so the
@@ -196,7 +204,7 @@ const WEBHOOK_ENV_RESERVED = [
   'GEMINI_MODEL'
 ];
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(
     `[server] PulseFlow CRM listening on port ${PORT} (${IS_PRODUCTION ? 'production' : 'development'})`
   );
@@ -214,4 +222,11 @@ app.listen(PORT, () => {
 
   const reserved = WEBHOOK_ENV_RESERVED.map((n) => `${n}=${process.env[n] ? 'set' : 'unset'}`);
   console.log(`[server] reserved env — ${reserved.join(' | ')}`);
+
+  // Connect to MongoDB Atlas
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('[server] Initial database connection attempt failed:', err.message);
+  }
 });

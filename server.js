@@ -80,15 +80,35 @@ async function sendWhatsAppCloudMessage(toPhone, textBody) {
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const version = process.env.WHATSAPP_API_VERSION || 'v21.0';
 
+  const cleanPhone = String(toPhone || '').replace(/[^0-9]/g, '');
+  console.log(
+    '[whatsapp-api] outgoing WhatsApp send started',
+    JSON.stringify({
+      to: cleanPhone || 'empty',
+      phoneNumberId: phoneId || 'missing',
+      apiVersion: version,
+      tokenConfigured: Boolean(token),
+      textLength: String(textBody || '').length
+    })
+  );
+
   if (!token || !phoneId || !toPhone) {
+    console.warn(
+      '[whatsapp-api] outgoing WhatsApp send failed',
+      JSON.stringify({ reason: 'missing-whatsapp-config', to: cleanPhone })
+    );
     return { sent: false, reason: 'missing-whatsapp-config' };
   }
 
-  const cleanPhone = String(toPhone).replace(/[^0-9]/g, '');
   if (cleanPhone.length < 8) {
+    console.warn(
+      '[whatsapp-api] outgoing WhatsApp send failed',
+      JSON.stringify({ reason: 'invalid-phone', to: cleanPhone })
+    );
     return { sent: false, reason: 'invalid-phone' };
   }
 
+  const t0 = Date.now();
   try {
     const url = `https://graph.facebook.com/${version}/${phoneId}/messages`;
     const response = await fetch(url, {
@@ -107,14 +127,41 @@ async function sendWhatsAppCloudMessage(toPhone, textBody) {
     });
 
     const data = await response.json();
+    const durationMs = Date.now() - t0;
     if (!response.ok) {
-      console.warn('[whatsapp-api] Outgoing message error:', data?.error?.message || response.status);
-      return { sent: false, error: data?.error?.message };
+      console.warn(
+        '[whatsapp-api] outgoing WhatsApp send failed',
+        JSON.stringify({
+          to: cleanPhone,
+          statusCode: response.status,
+          errorCode: data?.error?.code,
+          errorSubcode: data?.error?.error_subcode,
+          error: data?.error?.message || `HTTP ${response.status}`,
+          durationMs
+        })
+      );
+      return { sent: false, error: data?.error?.message, statusCode: response.status };
     }
     const wamid = data?.messages?.[0]?.id || `wamid.out.${Date.now()}`;
+    console.log(
+      '[whatsapp-api] outgoing WhatsApp send completed',
+      JSON.stringify({
+        to: cleanPhone,
+        whatsappMessageId: wamid,
+        statusCode: response.status,
+        durationMs
+      })
+    );
     return { sent: true, whatsappMessageId: wamid };
   } catch (err) {
-    console.warn('[whatsapp-api] Network error sending WhatsApp message:', err.message);
+    console.warn(
+      '[whatsapp-api] outgoing WhatsApp send failed',
+      JSON.stringify({
+        to: cleanPhone,
+        error: err.message,
+        durationMs: Date.now() - t0
+      })
+    );
     return { sent: false, error: err.message };
   }
 }
@@ -168,19 +215,25 @@ Analyze the customer message and return a JSON object with:
 
   const userPrompt = `Recent Conversation History:\n${historyText}\n\nLatest Customer Message:\n"${customerMessage}"\n\nRespond strictly with valid JSON.`;
 
+  const oaKey = (process.env.OPENAI_API_KEY || '').trim();
+  const isGithubPat = oaKey.startsWith('github_pat_') || oaKey.startsWith('ghp_');
+  const hasValidGeminiKey =
+    Boolean(process.env.GEMINI_API_KEY) && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY';
+
   const envProvider = process.env.AI_PROVIDER
     ? String(process.env.AI_PROVIDER).toUpperCase()
     : null;
-  const preferProvider = String(
-    envProvider || aiSettings.provider || 'GEMINI'
-  ).toUpperCase();
+
+  // If OPENAI_API_KEY is a GitHub PAT rather than an sk- OpenAI key and Gemini is configured, route directly to Gemini
+  const preferProvider =
+    isGithubPat && hasValidGeminiKey
+      ? 'GEMINI'
+      : String(aiSettings.provider || envProvider || 'GEMINI').toUpperCase();
 
   // Helper to run OpenAI / GitHub Models
   const tryOpenAIProvider = async () => {
-    if (!process.env.OPENAI_API_KEY) return null;
+    if (!oaKey) return null;
     try {
-      const apiKey = process.env.OPENAI_API_KEY.trim();
-      const isGithubPat = apiKey.startsWith('github_pat_') || apiKey.startsWith('ghp_');
       const endpoint = isGithubPat
         ? 'https://models.github.ai/inference/chat/completions'
         : 'https://api.openai.com/v1/chat/completions';
@@ -192,10 +245,15 @@ Analyze the customer message and return a JSON object with:
       const modelName =
         isGithubPat && !baseModel.includes('/') ? `openai/${baseModel}` : baseModel;
 
+      console.log(
+        '[ai-service] OpenAI request started',
+        JSON.stringify({ model: modelName, isGithubModels: isGithubPat })
+      );
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${oaKey}`,
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
@@ -237,7 +295,8 @@ Analyze the customer message and return a JSON object with:
 
   // Helper to run Google Gemini API via @google/genai SDK with automatic model failover on 503
   const tryGeminiProvider = async () => {
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'MY_GEMINI_API_KEY') {
+    if (!hasValidGeminiKey) {
+      console.warn('[ai-service] GEMINI_API_KEY not configured, skipping Gemini provider');
       return null;
     }
 
@@ -250,76 +309,108 @@ Analyze the customer message and return a JSON object with:
       }
     });
 
-    const configuredGeminiModel =
-      process.env.GEMINI_MODEL ||
+    const rawConfiguredModel =
       (aiSettings.model && aiSettings.model.startsWith('gemini') ? aiSettings.model : null) ||
+      process.env.GEMINI_MODEL ||
       'gemini-3.5-flash-lite';
 
-    // Candidate models in priority order: configured model first, followed by verified low-latency available models if 503 high demand occurs
+    // Map models known to experience 30s+ 503 stalls (gemini-3.8-flash) behind fast available models
+    const HIGH_DEMAND_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']);
+    const primaryModel = HIGH_DEMAND_MODELS.has(rawConfiguredModel)
+      ? 'gemini-3.5-flash-lite'
+      : rawConfiguredModel;
+
     const candidateModels = Array.from(
       new Set([
-        configuredGeminiModel,
+        primaryModel,
         'gemini-3.5-flash-lite',
         'gemini-3.1-flash-lite',
         'gemini-3.6-flash'
       ])
     );
 
-    for (const geminiModel of candidateModels) {
-      try {
-        const response = await ai.models.generateContent({
+    for (let i = 0; i < candidateModels.length; i++) {
+      const geminiModel = candidateModels[i];
+      const reqStart = Date.now();
+      console.log(
+        '[ai-service] Gemini request started',
+        JSON.stringify({
           model: geminiModel,
-          contents: userPrompt,
-          config: {
-            systemInstruction,
-            temperature: Number(aiSettings.temperature ?? 0.3),
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                reply: { type: Type.STRING },
-                intent: { type: Type.STRING },
-                service: { type: Type.STRING },
-                leadType: { type: Type.STRING },
-                leadScore: { type: Type.INTEGER },
-                budget: { type: Type.STRING },
-                timeline: { type: Type.STRING },
-                requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
-                summary: { type: Type.STRING },
-                needsHuman: { type: Type.BOOLEAN },
-                confidence: { type: Type.NUMBER }
-              },
-              required: [
-                'reply',
-                'intent',
-                'service',
-                'leadType',
-                'leadScore',
-                'budget',
-                'timeline',
-                'requirements',
-                'summary',
-                'needsHuman',
-                'confidence'
-              ]
-            }
-          }
-        });
+          configuredModel: rawConfiguredModel,
+          attempt: i + 1
+        })
+      );
 
-        if (response.text) {
+      try {
+        const response = await Promise.race([
+          ai.models.generateContent({
+            model: geminiModel,
+            contents: userPrompt,
+            config: {
+              systemInstruction,
+              temperature: Number(aiSettings.temperature ?? 0.3),
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  reply: { type: Type.STRING },
+                  intent: { type: Type.STRING },
+                  service: { type: Type.STRING },
+                  leadType: { type: Type.STRING },
+                  leadScore: { type: Type.INTEGER },
+                  budget: { type: Type.STRING },
+                  timeline: { type: Type.STRING },
+                  requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  summary: { type: Type.STRING },
+                  needsHuman: { type: Type.BOOLEAN },
+                  confidence: { type: Type.NUMBER }
+                },
+                required: [
+                  'reply',
+                  'intent',
+                  'service',
+                  'leadType',
+                  'leadScore',
+                  'budget',
+                  'timeline',
+                  'requirements',
+                  'summary',
+                  'needsHuman',
+                  'confidence'
+                ]
+              }
+            }
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Gemini request timed out after 10000ms')), 10000)
+          )
+        ]);
+
+        if (response?.text) {
           const parsed = JSON.parse(response.text.trim());
+          const normalized = normalizeAIOutput(parsed, lead);
+          console.log(
+            '[ai-service] Gemini response received',
+            JSON.stringify({
+              model: geminiModel,
+              durationMs: Date.now() - reqStart,
+              intent: normalized.intent,
+              leadType: normalized.leadType,
+              leadScore: normalized.leadScore
+            })
+          );
           console.log(`[ai-service] Response generated via Gemini (${geminiModel})`);
           return {
-            ...normalizeAIOutput(parsed, lead),
+            ...normalized,
             providerUsed: 'GEMINI',
             modelUsed: geminiModel
           };
         }
       } catch (err) {
         console.warn(
-          `[ai-service] Gemini model (${geminiModel}) error (${err.status || 'ERR'}): ${
-            err.message?.slice(0, 120) || 'Unknown error'
-          }`
+          `[ai-service] Gemini model (${geminiModel}) error (${err.status || 'ERR'}) after ${
+            Date.now() - reqStart
+          }ms: ${err.message?.slice(0, 120) || 'Unknown error'}`
         );
       }
     }
@@ -470,8 +561,34 @@ async function handleIncomingCustomerMessage({
   whatsappMessageId,
   languageHint
 }) {
+  await connectDB();
+
   const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  const lookupStart = Date.now();
+  console.log(
+    '[pipeline] contact/lead lookup started',
+    JSON.stringify({
+      fromPhone: fromPhone || 'none',
+      conversationId: conversationId || 'none',
+      whatsappMessageId: whatsappMessageId || 'none'
+    })
+  );
+
+  // Deduplicate if the exact same WhatsApp message ID was already processed
+  if (whatsappMessageId && String(whatsappMessageId).startsWith('wamid.HBg')) {
+    const existingMsg = await Message.findOne({ whatsappMessageId }).lean();
+    if (existingMsg) {
+      console.warn(
+        '[pipeline] duplicate whatsappMessageId ignored',
+        JSON.stringify({ whatsappMessageId, existingMsgId: existingMsg.id })
+      );
+      const conv = await Conversation.findOne({ id: existingMsg.conversationId });
+      const lead = conv ? await Lead.findOne({ id: conv.leadId }) : null;
+      return { customerMsg: existingMsg, aiMsg: null, conversation: conv, lead, duplicate: true };
+    }
+  }
 
   let conv = conversationId ? await Conversation.findOne({ id: conversationId }) : null;
   let contact = null;
@@ -558,6 +675,16 @@ async function handleIncomingCustomerMessage({
     throw new Error('Conversation not found');
   }
 
+  console.log(
+    '[pipeline] contact/lead lookup completed',
+    JSON.stringify({
+      contactId: contact?.id || 'none',
+      conversationId: conv.id,
+      leadId: lead?.id || 'none',
+      durationMs: Date.now() - lookupStart
+    })
+  );
+
   // Save Customer Message in MongoDB
   const customerMsg = await Message.create({
     id: `msg-cust-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
@@ -580,7 +707,28 @@ async function handleIncomingCustomerMessage({
   const aiSettingDoc = await Setting.findOne({ type: 'aiSettings' });
   const aiSettings = aiSettingDoc?.data || INITIAL_AI_SETTINGS;
 
+  console.log(
+    '[pipeline] AI processing started',
+    JSON.stringify({
+      conversationId: conv.id,
+      convAiEnabled: Boolean(conv.aiEnabled),
+      globalAiEnabled: Boolean(aiSettings.aiEnabled),
+      autoReplyEnabled: Boolean(aiSettings.autoReplyEnabled),
+      configuredProvider: aiSettings.provider || process.env.AI_PROVIDER || 'GEMINI',
+      configuredModel: aiSettings.model || process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
+    })
+  );
+
   if (!conv.aiEnabled || !aiSettings.aiEnabled || !aiSettings.autoReplyEnabled) {
+    console.warn(
+      '[pipeline] AI auto-reply skipped (disabled in conversation or settings)',
+      JSON.stringify({
+        conversationId: conv.id,
+        convAiEnabled: conv.aiEnabled,
+        globalAiEnabled: aiSettings.aiEnabled,
+        autoReplyEnabled: aiSettings.autoReplyEnabled
+      })
+    );
     conv.lastMessage = content.trim();
     conv.lastMessageTime = nowStr;
     conv.unreadCount = (conv.unreadCount || 0) + 1;
@@ -607,6 +755,9 @@ async function handleIncomingCustomerMessage({
     const waRes = await sendWhatsAppCloudMessage(contact.phone, aiStructured.reply);
     if (waRes.sent && waRes.whatsappMessageId) {
       outWamid = waRes.whatsappMessageId;
+      deliveryStatus = 'SENT';
+    } else {
+      deliveryStatus = 'FAILED';
     }
   }
 
@@ -781,6 +932,14 @@ function handleWebhookVerify(req, res) {
 
 async function handleWebhookPost(req, res) {
   const signature = verifySignature(req);
+  console.log(
+    '[webhook] received',
+    JSON.stringify({
+      path: req.path,
+      signatureValid: signature.ok,
+      signatureReason: signature.reason
+    })
+  );
 
   if (!signature.ok) {
     const unconfigured = signature.reason === 'app-secret-not-configured';
@@ -802,6 +961,8 @@ async function handleWebhookPost(req, res) {
   res.status(200).send('EVENT_RECEIVED');
 
   try {
+    await connectDB();
+
     const events = extractEvents(req.body);
     console.log(
       '[webhook] events received',
@@ -809,21 +970,50 @@ async function handleWebhookPost(req, res) {
     );
 
     for (const ev of events) {
-      if (ev.kind === 'message' && ev.from && ev.text) {
-        await handleIncomingCustomerMessage({
-          fromPhone: ev.from,
-          senderProfileName: ev.profileName,
-          content: ev.text,
-          whatsappMessageId: ev.messageId
-        });
-      } else if (ev.kind === 'status' && ev.messageId && ev.state) {
-        const statusUpper = String(ev.state).toUpperCase();
-        if (['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(statusUpper)) {
-          await Message.findOneAndUpdate(
-            { whatsappMessageId: ev.messageId },
-            { deliveryStatus: statusUpper }
+      try {
+        if (ev.kind === 'message') {
+          console.log(
+            '[webhook] message extracted',
+            JSON.stringify({
+              messageId: ev.messageId,
+              from: ev.from,
+              type: ev.type,
+              hasText: Boolean(ev.text),
+              textLength: String(ev.text || '').length
+            })
           );
+
+          if (ev.from && ev.text) {
+            await handleIncomingCustomerMessage({
+              fromPhone: ev.from,
+              senderProfileName: ev.profileName,
+              content: ev.text,
+              whatsappMessageId: ev.messageId
+            });
+          } else {
+            console.warn(
+              '[webhook] message skipped (no text content or sender phone)',
+              JSON.stringify({ messageId: ev.messageId, type: ev.type, from: ev.from })
+            );
+          }
+        } else if (ev.kind === 'status' && ev.messageId && ev.state) {
+          const statusUpper = String(ev.state).toUpperCase();
+          if (['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(statusUpper)) {
+            await Message.findOneAndUpdate(
+              { whatsappMessageId: ev.messageId },
+              { deliveryStatus: statusUpper }
+            );
+          }
         }
+      } catch (eventErr) {
+        console.error(
+          '[webhook] error processing individual event',
+          JSON.stringify({
+            kind: ev.kind,
+            messageId: ev.messageId,
+            error: eventErr?.message || 'unknown error'
+          })
+        );
       }
     }
 

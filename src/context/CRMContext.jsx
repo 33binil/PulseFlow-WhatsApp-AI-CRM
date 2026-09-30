@@ -43,8 +43,12 @@ export const CRMProvider = ({ children }) => {
   const fetchCRMData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const res = await fetch('/api/bootstrap');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch('/api/bootstrap', {
+        headers: { Accept: 'application/json' }
+      });
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
       const data = await res.json();
 
       if (Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
@@ -68,8 +72,8 @@ export const CRMProvider = ({ children }) => {
       if (data.whatsappSettings) setWhatsAppSettings(data.whatsappSettings);
       if (data.companySettings) setCompanySettings(data.companySettings);
       if (Array.isArray(data.notifications)) setNotifications(data.notifications);
-    } catch (err) {
-      console.error('[CRMContext] Failed to load CRM state from database:', err);
+    } catch (_err) {
+      // Ignore transient network/HTML responses during server restarts
     } finally {
       if (!silent) setIsLoading(false);
     }

@@ -274,8 +274,8 @@ export const AISettingsPage = () => {
                 }
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
               >
-                <option value="OPENAI">OpenAI API (Primary)</option>
-                <option value="GEMINI">Google Gemini API (Service Layer)</option>
+                <option value="GEMINI">Google Gemini API (Primary)</option>
+                <option value="OPENAI">OpenAI API (Service Layer)</option>
               </select>
             </div>
             <div>
@@ -285,9 +285,12 @@ export const AISettingsPage = () => {
                 onChange={(e) => setFormState({ ...formState, model: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white font-mono"
               >
+                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash</option>
                 <option value="gpt-4o-mini">gpt-4o-mini</option>
                 <option value="gpt-4o">gpt-4o</option>
-                <option value="gemini-3.8-flash">gemini-3.8-flash</option>
               </select>
             </div>
           </div>

@@ -168,29 +168,36 @@ Analyze the customer message and return a JSON object with:
 
   const userPrompt = `Recent Conversation History:\n${historyText}\n\nLatest Customer Message:\n"${customerMessage}"\n\nRespond strictly with valid JSON.`;
 
+  const envProvider = process.env.AI_PROVIDER
+    ? String(process.env.AI_PROVIDER).toUpperCase()
+    : null;
   const preferProvider = String(
-    aiSettings.provider || process.env.AI_PROVIDER || 'OPENAI'
+    envProvider || aiSettings.provider || 'GEMINI'
   ).toUpperCase();
 
-  // 1. Try OpenAI / GitHub Models if selected and key exists
-  if (preferProvider === 'OPENAI' && process.env.OPENAI_API_KEY) {
+  // Helper to run OpenAI / GitHub Models
+  const tryOpenAIProvider = async () => {
+    if (!process.env.OPENAI_API_KEY) return null;
     try {
       const apiKey = process.env.OPENAI_API_KEY.trim();
       const isGithubPat = apiKey.startsWith('github_pat_') || apiKey.startsWith('ghp_');
       const endpoint = isGithubPat
-        ? 'https://models.inference.ai.azure.com/chat/completions'
+        ? 'https://models.github.ai/inference/chat/completions'
         : 'https://api.openai.com/v1/chat/completions';
 
-      const modelName =
+      const baseModel =
         aiSettings.model && !aiSettings.model.startsWith('gemini')
           ? aiSettings.model
           : process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const modelName =
+        isGithubPat && !baseModel.includes('/') ? `openai/${baseModel}` : baseModel;
 
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
         },
         body: JSON.stringify({
           model: modelName,
@@ -204,87 +211,140 @@ Analyze the customer message and return a JSON object with:
       });
 
       if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content;
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return normalizeAIOutput(parsed, lead);
+        const rawText = await res.text();
+        if (rawText && rawText.trim().startsWith('{')) {
+          const data = JSON.parse(rawText);
+          const raw = data?.choices?.[0]?.message?.content;
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            console.log(`[ai-service] Response generated via OpenAI (${modelName})`);
+            return {
+              ...normalizeAIOutput(parsed, lead),
+              providerUsed: 'OPENAI',
+              modelUsed: modelName
+            };
+          }
         }
+        console.warn('[ai-service] OpenAI/GitHub Models returned non-JSON body, falling back to Gemini');
       } else {
-        console.warn('[ai-service] OpenAI/GitHub Models non-200, falling back to Gemini:', res.status);
+        console.warn('[ai-service] OpenAI/GitHub Models non-200 status, falling back to Gemini:', res.status);
       }
     } catch (err) {
       console.warn('[ai-service] OpenAI provider error, falling back to Gemini:', err.message);
     }
-  }
+    return null;
+  };
 
-  // 2. Try Google Gemini API via @google/genai SDK
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY') {
-    try {
-      const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
-
-      const geminiModel =
-        aiSettings.model && aiSettings.model.startsWith('gemini')
-          ? aiSettings.model
-          : process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-
-      const response = await ai.models.generateContent({
-        model: geminiModel,
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          temperature: Number(aiSettings.temperature ?? 0.3),
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              reply: { type: Type.STRING },
-              intent: { type: Type.STRING },
-              service: { type: Type.STRING },
-              leadType: { type: Type.STRING },
-              leadScore: { type: Type.INTEGER },
-              budget: { type: Type.STRING },
-              timeline: { type: Type.STRING },
-              requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
-              summary: { type: Type.STRING },
-              needsHuman: { type: Type.BOOLEAN },
-              confidence: { type: Type.NUMBER }
-            },
-            required: [
-              'reply',
-              'intent',
-              'service',
-              'leadType',
-              'leadScore',
-              'budget',
-              'timeline',
-              'requirements',
-              'summary',
-              'needsHuman',
-              'confidence'
-            ]
-          }
-        }
-      });
-
-      if (response.text) {
-        const parsed = JSON.parse(response.text.trim());
-        return normalizeAIOutput(parsed, lead);
-      }
-    } catch (err) {
-      console.warn('[ai-service] Gemini provider error, using deterministic analyzer:', err.message);
+  // Helper to run Google Gemini API via @google/genai SDK with automatic model failover on 503
+  const tryGeminiProvider = async () => {
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'MY_GEMINI_API_KEY') {
+      return null;
     }
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
+
+    const configuredGeminiModel =
+      process.env.GEMINI_MODEL ||
+      (aiSettings.model && aiSettings.model.startsWith('gemini') ? aiSettings.model : null) ||
+      'gemini-3.5-flash-lite';
+
+    // Candidate models in priority order: configured model first, followed by verified low-latency available models if 503 high demand occurs
+    const candidateModels = Array.from(
+      new Set([
+        configuredGeminiModel,
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3.6-flash'
+      ])
+    );
+
+    for (const geminiModel of candidateModels) {
+      try {
+        const response = await ai.models.generateContent({
+          model: geminiModel,
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            temperature: Number(aiSettings.temperature ?? 0.3),
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                reply: { type: Type.STRING },
+                intent: { type: Type.STRING },
+                service: { type: Type.STRING },
+                leadType: { type: Type.STRING },
+                leadScore: { type: Type.INTEGER },
+                budget: { type: Type.STRING },
+                timeline: { type: Type.STRING },
+                requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                summary: { type: Type.STRING },
+                needsHuman: { type: Type.BOOLEAN },
+                confidence: { type: Type.NUMBER }
+              },
+              required: [
+                'reply',
+                'intent',
+                'service',
+                'leadType',
+                'leadScore',
+                'budget',
+                'timeline',
+                'requirements',
+                'summary',
+                'needsHuman',
+                'confidence'
+              ]
+            }
+          }
+        });
+
+        if (response.text) {
+          const parsed = JSON.parse(response.text.trim());
+          console.log(`[ai-service] Response generated via Gemini (${geminiModel})`);
+          return {
+            ...normalizeAIOutput(parsed, lead),
+            providerUsed: 'GEMINI',
+            modelUsed: geminiModel
+          };
+        }
+      } catch (err) {
+        console.warn(
+          `[ai-service] Gemini model (${geminiModel}) error (${err.status || 'ERR'}): ${
+            err.message?.slice(0, 120) || 'Unknown error'
+          }`
+        );
+      }
+    }
+    return null;
+  };
+
+  if (preferProvider === 'GEMINI') {
+    const geminiResult = await tryGeminiProvider();
+    if (geminiResult) return geminiResult;
+    const openAiResult = await tryOpenAIProvider();
+    if (openAiResult) return openAiResult;
+  } else {
+    const openAiResult = await tryOpenAIProvider();
+    if (openAiResult) return openAiResult;
+    const geminiResult = await tryGeminiProvider();
+    if (geminiResult) return geminiResult;
   }
 
   // 3. Deterministic heuristic fallback grounded in DB KnowledgeBase
-  return buildDeterministicAIOutput(customerMessage, contact, lead, activeKb);
+  console.warn('[ai-service] All AI providers unavailable, using deterministic analyzer.');
+  return {
+    ...buildDeterministicAIOutput(customerMessage, contact, lead, activeKb),
+    providerUsed: 'DETERMINISTIC_FALLBACK',
+    modelUsed: 'rule-based'
+  };
 }
 
 function normalizeAIOutput(parsed, lead) {
@@ -1499,6 +1559,37 @@ app.post('/api/knowledge-gaps/:id/resolve', async (req, res) => {
 });
 
 // 8. Settings & Notifications
+app.post('/api/ai/test', async (req, res) => {
+  try {
+    await connectDB();
+    const message = String(req.body?.message || 'Hello').trim();
+    const aiSettingDoc = await Setting.findOne({ type: 'aiSettings' });
+    const aiSettings = aiSettingDoc?.data || INITIAL_AI_SETTINGS;
+    const knowledgeBase = await KnowledgeBase.find({});
+
+    const result = await generateAIQualificationAndReply({
+      customerMessage: message,
+      contact: { name: 'Test User', phone: '' },
+      lead: null,
+      historyMessages: [],
+      knowledgeBase,
+      aiSettings
+    });
+
+    res.json({
+      ok: true,
+      configuredProvider: process.env.AI_PROVIDER || aiSettings.provider || 'GEMINI',
+      configuredGeminiModel: process.env.GEMINI_MODEL || aiSettings.model || 'gemini-3.5-flash-lite',
+      providerUsed: result.providerUsed,
+      modelUsed: result.modelUsed,
+      input: message,
+      output: result
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.patch('/api/settings/:type', async (req, res) => {
   try {
     const type = req.params.type;

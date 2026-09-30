@@ -305,9 +305,34 @@ export async function purgeLegacyFakeDataAndEnsureDefaults() {
       );
     }
 
+    const envProvider = String(process.env.AI_PROVIDER || INITIAL_AI_SETTINGS.provider).toUpperCase();
+    const envModel =
+      envProvider === 'GEMINI'
+        ? process.env.GEMINI_MODEL || INITIAL_AI_SETTINGS.model
+        : process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
     const existingAi = await Setting.findOne({ type: 'aiSettings' });
     if (!existingAi) {
-      await Setting.create({ type: 'aiSettings', data: INITIAL_AI_SETTINGS });
+      await Setting.create({
+        type: 'aiSettings',
+        data: { ...INITIAL_AI_SETTINGS, provider: envProvider, model: envModel }
+      });
+    } else if (
+      existingAi.data?.model === 'gemini-3.8-flash' ||
+      existingAi.data?.model === 'gpt-4o-mini' ||
+      existingAi.data?.provider !== envProvider ||
+      String(existingAi.data?.systemPrompt || '').includes('TechNova')
+    ) {
+      await Setting.findOneAndUpdate(
+        { type: 'aiSettings' },
+        {
+          $set: {
+            'data.provider': envProvider,
+            'data.model': envModel,
+            'data.systemPrompt': INITIAL_AI_SETTINGS.systemPrompt
+          }
+        }
+      );
     }
 
     const existingCompany = await Setting.findOne({ type: 'companySettings' });

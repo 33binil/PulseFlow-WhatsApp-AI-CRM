@@ -27,8 +27,8 @@ export const INITIAL_NOTIFICATIONS = [];
 export const INITIAL_AI_SETTINGS = {
   aiEnabled: true,
   autoReplyEnabled: true,
-  provider: 'OPENAI',
-  model: 'gpt-4o-mini',
+  provider: 'GEMINI',
+  model: 'gemini-3.5-flash-lite',
   temperature: 0.3,
   maxResponseLength: 350,
   scoreThresholds: {

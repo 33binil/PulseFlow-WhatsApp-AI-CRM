@@ -271,7 +271,7 @@ export const DashboardPage = () => {
             What AI Learned Today
           </div>
           <div className="text-2xl font-bold font-mono text-indigo-700 mt-1 tabular-nums">
-            {leads.reduce((acc, l) => acc + l.buyingSignals.length, 0)} buying signals
+            {leads.reduce((acc, l) => acc + (l.buyingSignals?.length || 0), 0)} buying signals
           </div>
           <p className="text-xs text-slate-600 mt-1.5">
             Plus {unresolvedGaps.length} new customer questions you can approve in 1 click.

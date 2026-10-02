@@ -179,10 +179,16 @@ export const CRMProvider = ({ children }) => {
     })
       .then((r) => r.json())
       .then((data) => {
+        if (data?.lead) {
+          setLeads((prev) => {
+            if (prev.some((l) => l.id === data.lead.id || l.contactId === created.id)) return prev;
+            return [data.lead, ...prev];
+          });
+        }
         if (data?.conversation) {
           setConversations((prev) => {
             if (prev.some((c) => c.id === data.conversation.id || c.contactId === created.id)) {
-              return prev;
+              return prev.map((c) => (c.contactId === created.id ? data.conversation : c));
             }
             return [data.conversation, ...prev];
           });

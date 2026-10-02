@@ -64,11 +64,11 @@ export const LeadsListPage = () => {
         if (search.trim()) {
           const q = search.toLowerCase();
           return (
-            contact?.name.toLowerCase().includes(q) ||
-            contact?.phone.toLowerCase().includes(q) ||
-            lead.interestedService.toLowerCase().includes(q) ||
-            lead.aiSummary.toLowerCase().includes(q) ||
-            lead.buyingSignals.some((s) => s.toLowerCase().includes(q))
+            (contact?.name || '').toLowerCase().includes(q) ||
+            (contact?.phone || '').toLowerCase().includes(q) ||
+            (lead.interestedService || '').toLowerCase().includes(q) ||
+            (lead.aiSummary || '').toLowerCase().includes(q) ||
+            (lead.buyingSignals || []).some((s) => s.toLowerCase().includes(q))
           );
         }
         return true;
@@ -716,7 +716,7 @@ export const LeadDetailsPage = () => {
                   <span>Why they look ready to buy:</span>
                 </div>
                 <ul className="space-y-1.5 text-xs text-slate-700">
-                  {lead.buyingSignals.map((sig, i) => (
+                  {(lead.buyingSignals || []).map((sig, i) => (
                     <li key={i} className="flex items-start gap-2">
                       <span className="text-emerald-600 font-bold">•</span>
                       <span>{sig}</span>
@@ -730,9 +730,9 @@ export const LeadDetailsPage = () => {
                   <ShieldAlert className="w-4 h-4 text-amber-600" />
                   <span>Questions or concerns to address:</span>
                 </div>
-                {lead.detectedObjections.length > 0 ? (
+                {(lead.detectedObjections || []).length > 0 ? (
                   <ul className="space-y-1.5 text-xs text-slate-700">
-                    {lead.detectedObjections.map((obj, i) => (
+                    {(lead.detectedObjections || []).map((obj, i) => (
                       <li key={i} className="flex items-start gap-2">
                         <span className="text-amber-600 font-bold">•</span>
                         <span>{obj}</span>
@@ -984,7 +984,7 @@ export const LeadDetailsPage = () => {
               </button>
             </form>
             <div className="space-y-2">
-              {lead.notes.map((n) => (
+              {(lead.notes || []).map((n) => (
                 <div
                   key={n.id}
                   className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs"

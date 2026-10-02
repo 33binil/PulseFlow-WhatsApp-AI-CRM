@@ -468,7 +468,7 @@ export const ContactDetailsPage = () => {
               </button>
             </form>
             <div className="space-y-2">
-              {contact.notes.map((n) => (
+              {(contact.notes || []).map((n) => (
                 <div key={n.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                   <div className="text-[11px] text-slate-500">
                     {n.authorName} · {n.createdAt}

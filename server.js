@@ -638,19 +638,29 @@ async function handleIncomingCustomerMessage({
           leadStatus: 'NEW',
           leadType: 'WARM',
           leadScore: 55,
+          scoreBreakdown: {
+            budgetReadiness: 12,
+            needSpecificity: 12,
+            timelineUrgency: 10,
+            decisionAuthority: 8,
+            engagementDepth: 8
+          },
           interestedService: 'WhatsApp Inquiry',
           budget: 'Not disclosed',
           estimatedValueInr: 0,
           timeline: 'Not specified',
           requirements: [content.slice(0, 80)],
           buyingSignals: ['Inbound WhatsApp message received'],
+          detectedObjections: [],
+          recommendedNextAction: 'Review customer requirements and send initial response.',
           source: 'WhatsApp Inbound',
           assignedAgentId: 'admin-1',
           aiSummary: `New WhatsApp inquiry from ${contact.name}: "${content.slice(0, 80)}"`,
           purchaseIntent: false,
           lastInteractionAt: 'Just now',
           createdAt: todayStr,
-          updatedAt: todayStr
+          updatedAt: todayStr,
+          notes: []
         });
       }
 
@@ -1325,14 +1335,48 @@ app.post('/api/contacts', async (req, res) => {
       totalMessages: 0
     });
 
-    // Also create a default Conversation so this contact can be messaged in WhatsApp Inbox immediately
+    // Also create a default Lead and Conversation so this contact is fully initialized across all CRM views
+    const leadId = `ld-${Date.now()}`;
+    const convId = `conv-${Date.now()}`;
+
+    const createdLead = await Lead.create({
+      id: leadId,
+      contactId: createdContact.id,
+      conversationId: convId,
+      leadStatus: 'NEW',
+      leadType: 'WARM',
+      leadScore: 50,
+      scoreBreakdown: {
+        budgetReadiness: 12,
+        needSpecificity: 12,
+        timelineUrgency: 10,
+        decisionAuthority: 8,
+        engagementDepth: 8
+      },
+      interestedService: (req.body.tags && req.body.tags[0]) || 'General Inquiry',
+      budget: 'Not disclosed',
+      estimatedValueInr: 0,
+      timeline: 'Not specified',
+      requirements: [],
+      buyingSignals: ['New contact added to CRM'],
+      detectedObjections: [],
+      recommendedNextAction: 'Review customer requirements and send initial response.',
+      source: createdContact.source || 'WhatsApp Inbound',
+      assignedAgentId: req.body.assignedAgentId || 'admin-1',
+      aiSummary: `New contact ${createdContact.name} created.`,
+      purchaseIntent: false,
+      lastInteractionAt: 'Just now',
+      createdAt: todayStr,
+      updatedAt: todayStr,
+      notes: []
+    });
+
     let createdConversation = null;
     if (req.body.createConversation !== false) {
-      const convId = `conv-${Date.now()}`;
       createdConversation = await Conversation.create({
         id: convId,
         contactId: createdContact.id,
-        leadId: '',
+        leadId: createdLead.id,
         assignedAgentId: req.body.assignedAgentId || 'admin-1',
         status: 'OPEN',
         aiEnabled: true,
@@ -1347,7 +1391,8 @@ app.post('/api/contacts', async (req, res) => {
 
     res.status(201).json({
       contact: cleanDoc(createdContact),
-      conversation: cleanDoc(createdConversation)
+      conversation: cleanDoc(createdConversation),
+      lead: cleanDoc(createdLead)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1819,6 +1864,23 @@ app.post('/api/notifications/read-all', async (_req, res) => {
   }
 });
 
+// Database offline error middleware fallback
+app.use((err, req, res, next) => {
+  if (
+    err.name === 'MongooseError' ||
+    err.name === 'MongoNetworkError' ||
+    err.message?.includes('buffering timed out')
+  ) {
+    console.warn('[AI Studio] Database offline — returning mock empty response');
+    if (req.method === 'GET') {
+      return res.json(req.path.endsWith('s') || req.path.endsWith('s/') ? [] : {});
+    }
+    return res.status(503).json({ error: 'Service temporarily unavailable (database offline)' });
+  }
+  console.error('[server error]', err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
+});
+
 // ============================================================================
 // FRONTEND SERVING (STATIC DIST IN PROD, VITE MIDDLEWARE IN DEV)
 // ============================================================================
@@ -1838,12 +1900,65 @@ async function startServer() {
       res.sendFile(path.join(DIST_DIR, 'index.html'));
     });
   } else {
+    // Resilient fallback for any hashed asset requests (e.g. if browser cached an earlier build's CSS or JS link)
+    if (hasDist) {
+      app.get('/assets/:file', (req, res, next) => {
+        const filePath = path.join(DIST_DIR, 'assets', req.params.file);
+        if (fs.existsSync(filePath)) {
+          return res.sendFile(filePath);
+        }
+        const assetsDir = path.join(DIST_DIR, 'assets');
+        if (fs.existsSync(assetsDir)) {
+          const files = fs.readdirSync(assetsDir);
+          if (req.params.file.endsWith('.css')) {
+            const cssFile = files.find((f) => f.endsWith('.css'));
+            if (cssFile) {
+              res.type('text/css');
+              return res.sendFile(path.join(assetsDir, cssFile));
+            }
+          }
+          if (req.params.file.endsWith('.js')) {
+            const jsFile = files.find((f) => f.endsWith('.js'));
+            if (jsFile) {
+              res.type('application/javascript');
+              return res.sendFile(path.join(assetsDir, jsFile));
+            }
+          }
+        }
+        res.status(404).type('text/plain').send('Asset Not Found');
+      });
+    }
+
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);
+
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      // Do not return index.html for API routes, webhooks, or file requests with extensions
+      if (
+        req.method !== 'GET' ||
+        url.startsWith('/api') ||
+        WEBHOOK_PATHS.has(url) ||
+        /\.[a-zA-Z0-9]+$/.test(req.path)
+      ) {
+        if (/\.[a-zA-Z0-9]+$/.test(req.path)) {
+          return res.status(404).type('text/plain').send('File Not Found');
+        }
+        return next();
+      }
+      try {
+        let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html; charset=utf-8' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   }
 
   const WEBHOOK_ENV_REQUIRED = ['WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET'];

@@ -57,10 +57,10 @@ export const AIInsightsPage = () => {
       return (
         contact?.name.toLowerCase().includes(q) ||
         contact?.company.toLowerCase().includes(q) ||
-        l.interestedService.toLowerCase().includes(q) ||
-        l.aiSummary.toLowerCase().includes(q) ||
-        l.buyingSignals.some((s) => s.toLowerCase().includes(q)) ||
-        l.detectedObjections.some((o) => o.toLowerCase().includes(q))
+        (l.interestedService || '').toLowerCase().includes(q) ||
+        (l.aiSummary || '').toLowerCase().includes(q) ||
+        (l.buyingSignals || []).some((s) => s.toLowerCase().includes(q)) ||
+        (l.detectedObjections || []).some((o) => o.toLowerCase().includes(q))
       );
     });
   }, [leads, contacts, searchQuery]);
@@ -223,7 +223,7 @@ export const AIInsightsPage = () => {
                       <span>Why they are interested:</span>
                     </div>
                     <ul className="space-y-1 text-xs text-slate-700">
-                      {lead.buyingSignals.map((sig, i) => (
+                      {(lead.buyingSignals || []).map((sig, i) => (
                         <li key={i} className="flex items-start gap-1.5">
                           <span className="text-emerald-600 font-bold">•</span>
                           <span>{sig}</span>
@@ -237,9 +237,9 @@ export const AIInsightsPage = () => {
                       <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
                       <span>Questions or concerns:</span>
                     </div>
-                    {lead.detectedObjections.length > 0 ? (
+                    {(lead.detectedObjections || []).length > 0 ? (
                       <ul className="space-y-1 text-xs text-slate-700">
-                        {lead.detectedObjections.map((obj, i) => (
+                        {(lead.detectedObjections || []).map((obj, i) => (
                           <li key={i} className="flex items-start gap-1.5">
                             <span className="text-amber-600 font-bold">•</span>
                             <span>{obj}</span>

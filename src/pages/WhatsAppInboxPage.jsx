@@ -118,7 +118,9 @@ export const WhatsAppInboxPage = () => {
   const enrichedConversations = useMemo(() => {
     return conversations.map((conv) => {
       const contact = contacts.find((c) => c.id === conv.contactId);
-      const lead = leads.find((l) => l.id === conv.leadId);
+      const lead = leads.find(
+        (l) => (conv.leadId && l.id === conv.leadId) || (conv.contactId && l.contactId === conv.contactId)
+      );
       return { conv, contact, lead };
     });
   }, [conversations, contacts, leads]);
@@ -170,16 +172,16 @@ export const WhatsAppInboxPage = () => {
 
   const handleAddQuickFollowUp = (e) => {
     e.preventDefault();
-    if (!activeItem?.lead || !activeItem?.contact) return;
+    if (!activeItem?.contact) return;
     addFollowUp({
-      leadId: activeItem.lead.id,
+      leadId: activeItem.lead?.id || '',
       contactId: activeItem.contact.id,
-      assignedUserId: activeItem.lead.assignedAgentId,
+      assignedUserId: activeItem.lead?.assignedAgentId || currentUser?.id || 'admin-1',
       date: followUpDate,
       time: followUpTime,
       note:
         followUpNote ||
-        `Follow up with ${activeItem.contact.name} regarding ${activeItem.lead.interestedService}`,
+        `Follow up with ${activeItem.contact.name} regarding ${activeItem.lead?.interestedService || 'WhatsApp inquiry'}`,
       status: 'PENDING'
     });
     setFollowUpNote('');
@@ -761,7 +763,7 @@ export const WhatsAppInboxPage = () => {
         <div className="pb-4 border-b border-slate-200">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">What AI Knows</h3>
-            {lead && (
+            {lead ? (
               <Link
                 to={`/leads/${lead.id}`}
                 className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
@@ -769,296 +771,280 @@ export const WhatsAppInboxPage = () => {
                 <span>Full Details</span>
                 <ExternalLink className="w-3 h-3" />
               </Link>
-            )}
+            ) : null}
           </div>
           <div className="text-xs text-slate-600 mt-1 space-y-0.5">
             <div className="font-bold text-slate-900">
-              {contact?.name} · {contact?.company}
+              {contact?.name || 'Customer'} · {contact?.company || 'WhatsApp Customer'}
             </div>
             <div>
-              {contact?.location} · Best time: {contact?.bestTimeToContact || '10 AM – 6 PM'}
+              {contact?.location ? `${contact.location} · ` : ''}Best time: {contact?.bestTimeToContact || '10 AM – 6 PM'}
             </div>
           </div>
         </div>
 
-        {/* 2. Simple 3-Box Summary (What they want, Budget, Timeline) */}
-        {lead && (
-          <div className="space-y-2.5 pb-4 border-b border-slate-200">
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="text-[11px] text-slate-500">Service They Want</div>
-              <div className="text-xs font-bold text-slate-900 mt-0.5">
-                {lead.interestedService}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-[11px] text-slate-500">Confirmed Budget</div>
-                <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5 tabular-nums">
-                  {lead.budget}
-                </div>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-[11px] text-slate-500">Start Timeline</div>
-                <div className="text-xs font-semibold text-slate-900 mt-0.5">{lead.timeline}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. Recommended Next Step & Buying Signals */}
-        {lead && (
-          <div className="space-y-3 pb-4 border-b border-slate-200">
-            <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-1.5">
-              <div className="text-[11px] font-bold text-emerald-400">
-                Suggested Next Step for You:
-              </div>
-              <p className="text-xs text-slate-100 leading-relaxed">{lead.recommendedNextAction}</p>
-            </div>
-
-            <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-3">
-              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5 mb-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Why they look ready to buy:</span>
-              </div>
-              <ul className="space-y-1 text-xs text-slate-700">
-                {lead.buyingSignals.map((sig, i) => (
-                  <li key={i} className="flex items-start gap-1.5">
-                    <span className="text-emerald-600 font-bold">•</span>
-                    <span>{sig}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {lead.detectedObjections.length > 0 && (
-              <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3">
-                <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 mb-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Questions / Concerns to answer:</span>
-                </div>
-                <ul className="space-y-1 text-xs text-slate-700">
-                  {lead.detectedObjections.map((obj, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="text-amber-600 font-bold">•</span>
-                      <span>{obj}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. Lead Score & Status Controls (With Optional Expandable Score Breakdown) */}
-        {lead && (
-          <div className="space-y-3 pb-4 border-b border-slate-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-slate-900">AI Lead Score</div>
-                <button
-                  type="button"
-                  onClick={() => setShowScoreDetails((prev) => !prev)}
-                  className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
-                >
-                  <span>{showScoreDetails ? 'Hide how score is calculated' : 'How is this scored?'}</span>
-                  {showScoreDetails ? (
-                    <ChevronUp className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                </button>
-              </div>
-              <span
-                className={`text-base font-bold font-mono tabular-nums ${
-                  lead.leadScore >= 81
-                    ? 'text-emerald-700'
-                    : lead.leadScore >= 61
-                    ? 'text-indigo-700'
-                    : 'text-amber-700'
-                }`}
-              >
-                {lead.leadScore}/100 ({lead.leadType})
-              </span>
-            </div>
-
-            {showScoreDetails && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                {[
-                  { label: 'Has Budget Ready', val: lead.scoreBreakdown.budgetReadiness, max: 25 },
-                  { label: 'Clear Requirement', val: lead.scoreBreakdown.needSpecificity, max: 25 },
-                  { label: 'Wants to Start Soon', val: lead.scoreBreakdown.timelineUrgency, max: 20 },
-                  { label: 'Decision Maker', val: lead.scoreBreakdown.decisionAuthority, max: 15 },
-                  { label: 'Active in Chat', val: lead.scoreBreakdown.engagementDepth, max: 15 }
-                ].map((item) => {
-                  const pct = Math.round((item.val / item.max) * 100);
-                  return (
-                    <div key={item.label} className="space-y-0.5">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-slate-600">{item.label}</span>
-                        <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                          {item.val}/{item.max}
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 rounded-sm overflow-hidden">
-                        <div
-                          className={`h-full ${
-                            pct >= 80
-                              ? 'bg-emerald-600'
-                              : pct >= 55
-                              ? 'bg-amber-500'
-                              : 'bg-slate-400'
-                          }`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Priority</label>
-                <select
-                  value={lead.leadType}
-                  onChange={(e) => updateLead(lead.id, { leadType: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
-                >
-                  <option value="HOT">HOT (Ready)</option>
-                  <option value="WARM">WARM</option>
-                  <option value="COLD">COLD</option>
-                  <option value="UNQUALIFIED">UNQUALIFIED</option>
-                  <option value="EXISTING_CUSTOMER">EXISTING CUSTOMER</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Deal Stage</label>
-                <select
-                  value={lead.leadStatus}
-                  onChange={(e) => updateLead(lead.id, { leadStatus: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
-                >
-                  <option value="NEW">NEW</option>
-                  <option value="CONTACTED">CONTACTED</option>
-                  <option value="QUALIFIED">QUALIFIED</option>
-                  <option value="PROPOSAL">PROPOSAL SENT</option>
-                  <option value="NEGOTIATION">NEGOTIATION</option>
-                  <option value="WON">WON (CLOSED)</option>
-                  <option value="LOST">LOST</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">Handled By</label>
-              <select
-                value={lead.assignedAgentId}
-                onChange={(e) => updateLead(lead.id, { assignedAgentId: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
-              >
-                {teamMembers.map((tm) => (
-                  <option key={tm.id} value={tm.id}>
-                    {tm.name} ({tm.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* 5. Schedule Reminder / Follow-up */}
-        <div className="pb-4 border-b border-slate-200">
-          <button
-            type="button"
-            onClick={() => setShowFollowUpModal((prev) => !prev)}
-            className="w-full py-2 px-3 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <CalendarPlus className="w-3.5 h-3.5" />
-            <span>Schedule Call / Reminder</span>
-          </button>
-
-          {showFollowUpModal && (
-            <form
-              onSubmit={handleAddQuickFollowUp}
-              className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5"
-            >
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded bg-white"
-                  required
-                />
-                <input
-                  type="time"
-                  value={followUpTime}
-                  onChange={(e) => setFollowUpTime(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded bg-white"
-                  required
-                />
-              </div>
-              <input
-                type="text"
-                value={followUpNote}
-                onChange={(e) => setFollowUpNote(e.target.value)}
-                placeholder="What should we follow up on?"
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded bg-white"
-              />
-              <button
-                type="submit"
-                className="w-full py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 cursor-pointer"
-              >
-                Save Reminder
-              </button>
-            </form>
-          )}
-        </div>
-
-        {/* 6. Quick Team Notes */}
-        {lead && (
-          <div className="space-y-2.5">
-            <div className="text-xs font-bold text-slate-900">Team Notes</div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!noteInput.trim()) return;
-                addLeadNote(lead.id, noteInput);
-                setNoteInput('');
+        {!lead ? (
+          <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-3 text-center">
+            <div className="text-xs font-semibold text-slate-700">No Lead Profile Linked</div>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Create a lead record for {contact?.name || 'this customer'} to track budget, urgency score, and deal stage.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (!contact) return;
+                addLead({
+                  contactId: contact.id,
+                  conversationId: conv.id,
+                  leadStatus: 'NEW',
+                  leadType: 'WARM',
+                  leadScore: 55,
+                  interestedService: 'General Inquiry',
+                  budget: 'Not disclosed',
+                  estimatedValueInr: 0,
+                  timeline: 'Not specified',
+                  requirements: [],
+                  buyingSignals: ['Active WhatsApp chat logged'],
+                  source: 'WhatsApp Inbound',
+                  assignedAgentId: currentUser?.id || 'admin-1',
+                  aiSummary: `Chat started with ${contact.name}.`,
+                  purchaseIntent: false
+                });
               }}
-              className="flex gap-1.5"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
-              <input
-                type="text"
-                value={noteInput}
-                onChange={(e) => setNoteInput(e.target.value)}
-                placeholder="Write a quick note..."
-                className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg"
-              />
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg cursor-pointer"
-              >
-                Save
-              </button>
-            </form>
-            <div className="space-y-2 mt-2">
-              {lead.notes.map((n) => (
-                <div
-                  key={n.id}
-                  className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                >
-                  <div className="text-[11px] text-slate-500">
-                    {n.authorName} · {n.createdAt}
-                  </div>
-                  <div className="text-slate-800 mt-0.5">{n.content}</div>
-                </div>
-              ))}
-            </div>
+              + Create Lead for this Customer
+            </button>
           </div>
+        ) : (
+          <>
+            {/* 2. Simple 3-Box Summary (What they want, Budget, Timeline) */}
+            <div className="space-y-2.5 pb-4 border-b border-slate-200">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-[11px] text-slate-500">Service They Want</div>
+                <div className="text-xs font-bold text-slate-900 mt-0.5">
+                  {lead.interestedService || 'General Inquiry'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="text-[11px] text-slate-500">Confirmed Budget</div>
+                  <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5 tabular-nums">
+                    {lead.budget || 'Not disclosed'}
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="text-[11px] text-slate-500">Start Timeline</div>
+                  <div className="text-xs font-semibold text-slate-900 mt-0.5">{lead.timeline || 'Not specified'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Recommended Next Step & Buying Signals */}
+            <div className="space-y-3 pb-4 border-b border-slate-200">
+              <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-1.5">
+                <div className="text-[11px] font-bold text-emerald-400">
+                  Suggested Next Step for You:
+                </div>
+                <p className="text-xs text-slate-100 leading-relaxed">
+                  {lead.recommendedNextAction || 'Review customer requirements and send initial response.'}
+                </p>
+              </div>
+
+              {(lead.buyingSignals && lead.buyingSignals.length > 0) && (
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-3">
+                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5 mb-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Why they look ready to buy:</span>
+                  </div>
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    {lead.buyingSignals.map((sig, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="text-emerald-600 font-bold">•</span>
+                        <span>{sig}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(lead.detectedObjections && lead.detectedObjections.length > 0) && (
+                <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3">
+                  <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5 mb-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Questions / Concerns to answer:</span>
+                  </div>
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    {lead.detectedObjections.map((obj, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="text-amber-600 font-bold">•</span>
+                        <span>{obj}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* 4. Lead Score & Status Controls */}
+            <div className="space-y-3 pb-4 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-900">AI Lead Score</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowScoreDetails((prev) => !prev)}
+                    className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
+                  >
+                    <span>{showScoreDetails ? 'Hide how score is calculated' : 'How is this scored?'}</span>
+                    {showScoreDetails ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+                <span
+                  className={`text-base font-bold font-mono tabular-nums ${
+                    (lead.leadScore ?? 50) >= 81
+                      ? 'text-emerald-700'
+                      : (lead.leadScore ?? 50) >= 61
+                      ? 'text-indigo-700'
+                      : 'text-amber-700'
+                  }`}
+                >
+                  {lead.leadScore ?? 50}/100 ({lead.leadType || 'WARM'})
+                </span>
+              </div>
+
+              {showScoreDetails && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                  {[
+                    { label: 'Has Budget Ready', val: lead.scoreBreakdown?.budgetReadiness ?? 12, max: 25 },
+                    { label: 'Clear Requirement', val: lead.scoreBreakdown?.needSpecificity ?? 12, max: 25 },
+                    { label: 'Wants to Start Soon', val: lead.scoreBreakdown?.timelineUrgency ?? 10, max: 20 },
+                    { label: 'Decision Maker', val: lead.scoreBreakdown?.decisionAuthority ?? 8, max: 15 },
+                    { label: 'Active in Chat', val: lead.scoreBreakdown?.engagementDepth ?? 8, max: 15 }
+                  ].map((item) => {
+                    const pct = Math.round((item.val / item.max) * 100);
+                    return (
+                      <div key={item.label} className="space-y-0.5">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-600">{item.label}</span>
+                          <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                            {item.val}/{item.max}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-sm overflow-hidden">
+                          <div
+                            className={`h-full ${
+                              pct >= 80
+                                ? 'bg-emerald-600'
+                                : pct >= 55
+                                ? 'bg-amber-500'
+                                : 'bg-slate-400'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Priority</label>
+                  <select
+                    value={lead.leadType || 'WARM'}
+                    onChange={(e) => updateLead(lead.id, { leadType: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="HOT">HOT (Ready)</option>
+                    <option value="WARM">WARM</option>
+                    <option value="COLD">COLD</option>
+                    <option value="UNQUALIFIED">UNQUALIFIED</option>
+                    <option value="EXISTING_CUSTOMER">EXISTING CUSTOMER</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Deal Stage</label>
+                  <select
+                    value={lead.leadStatus || 'NEW'}
+                    onChange={(e) => updateLead(lead.id, { leadStatus: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="NEW">NEW</option>
+                    <option value="CONTACTED">CONTACTED</option>
+                    <option value="QUALIFIED">QUALIFIED</option>
+                    <option value="PROPOSAL">PROPOSAL SENT</option>
+                    <option value="NEGOTIATION">NEGOTIATION</option>
+                    <option value="WON">WON (CLOSED)</option>
+                    <option value="LOST">LOST</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">Handled By</label>
+                <select
+                  value={lead.assignedAgentId || 'admin-1'}
+                  onChange={(e) => updateLead(lead.id, { assignedAgentId: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  {teamMembers.map((tm) => (
+                    <option key={tm.id} value={tm.id}>
+                      {tm.name} ({tm.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 6. Quick Team Notes */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-bold text-slate-900">Team Notes</div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!noteInput.trim()) return;
+                  addLeadNote(lead.id, noteInput);
+                  setNoteInput('');
+                }}
+                className="flex gap-1.5"
+              >
+                <input
+                  type="text"
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  placeholder="Write a quick note..."
+                  className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg cursor-pointer"
+                >
+                  Save
+                </button>
+              </form>
+              <div className="space-y-2 mt-2">
+                {(lead.notes || []).map((n) => (
+                  <div
+                    key={n.id}
+                    className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  >
+                    <div className="text-[11px] text-slate-500">
+                      {n.authorName} · {n.createdAt}
+                    </div>
+                    <div className="text-slate-800 mt-0.5">{n.content}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
 

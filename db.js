@@ -1,10 +1,14 @@
 import mongoose from 'mongoose';
 import {
   INITIAL_TEAM_MEMBERS,
+  INITIAL_KNOWLEDGE_BASE,
   INITIAL_AI_SETTINGS,
   INITIAL_WHATSAPP_SETTINGS,
   INITIAL_COMPANY_SETTINGS
 } from './defaultData.js';
+
+// CRITICAL: fail fast, don't hang when MongoDB is offline
+mongoose.set('bufferCommands', false);
 
 const NoteSubSchema = new mongoose.Schema(
   {
@@ -226,130 +230,310 @@ const NotificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const TeamMember =
+// Real Mongoose Models
+const RealTeamMember =
   mongoose.models.TeamMember || mongoose.model('TeamMember', TeamMemberSchema);
-export const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
-export const Lead = mongoose.models.Lead || mongoose.model('Lead', LeadSchema);
-export const Conversation =
+const RealContact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
+const RealLead = mongoose.models.Lead || mongoose.model('Lead', LeadSchema);
+const RealConversation =
   mongoose.models.Conversation || mongoose.model('Conversation', ConversationSchema);
-export const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
-export const FollowUp = mongoose.models.FollowUp || mongoose.model('FollowUp', FollowUpSchema);
-export const KnowledgeBase =
+const RealMessage = mongoose.models.Message || mongoose.model('Message', MessageSchema);
+const RealFollowUp = mongoose.models.FollowUp || mongoose.model('FollowUp', FollowUpSchema);
+const RealKnowledgeBase =
   mongoose.models.KnowledgeBase || mongoose.model('KnowledgeBase', KnowledgeBaseSchema);
-export const KnowledgeGap =
+const RealKnowledgeGap =
   mongoose.models.KnowledgeGap || mongoose.model('KnowledgeGap', KnowledgeGapSchema);
-export const Setting = mongoose.models.Setting || mongoose.model('Setting', SettingSchema);
-export const Notification =
+const RealSetting = mongoose.models.Setting || mongoose.model('Setting', SettingSchema);
+const RealNotification =
   mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
 
-const FAKE_IDS = {
-  contacts: ['cnt-1', 'cnt-2', 'cnt-3', 'cnt-4', 'cnt-5', 'cnt-6', 'cnt-7', 'cnt-8'],
-  leads: ['ld-1', 'ld-2', 'ld-3', 'ld-4', 'ld-5', 'ld-6', 'ld-7', 'ld-8'],
-  conversations: ['conv-1', 'conv-2', 'conv-3', 'conv-4', 'conv-5', 'conv-6', 'conv-7', 'conv-8'],
-  messages: [
-    'msg-101',
-    'msg-102',
-    'msg-103',
-    'msg-104',
-    'msg-201',
-    'msg-202',
-    'msg-203',
-    'msg-301',
-    'msg-302',
-    'msg-401',
-    'msg-402'
-  ],
-  followUps: ['fu-1', 'fu-2', 'fu-3', 'fu-4', 'fu-5', 'fu-6'],
-  teamMembers: ['usr-1', 'usr-2', 'usr-3', 'usr-4'],
-  knowledgeBase: ['kb-1', 'kb-2', 'kb-3', 'kb-4', 'kb-5', 'kb-6'],
-  knowledgeGaps: ['gap-1', 'gap-2', 'gap-3'],
-  notifications: ['notif-1', 'notif-2', 'notif-3', 'notif-4']
+// ============================================================================
+// IN-MEMORY FALLBACK DATABASE ADAPTER
+// When MongoDB is offline/unreachable in AI Studio, this provides immediate,
+// seamless in-memory CRUD operations with zero buffering timeouts.
+// ============================================================================
+
+function matchesFilter(item, filter = {}) {
+  if (!filter || Object.keys(filter).length === 0) return true;
+  for (const [key, val] of Object.entries(filter)) {
+    if (val !== null && typeof val === 'object' && '$in' in val) {
+      if (!val.$in.includes(item[key])) return false;
+    } else if (item[key] !== val) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function applySort(items, sortObj) {
+  if (!sortObj || typeof sortObj !== 'object') return items;
+  const entries = Object.entries(sortObj);
+  return [...items].sort((a, b) => {
+    for (const [field, direction] of entries) {
+      const aVal = a[field];
+      const bVal = b[field];
+      if (aVal === bVal) continue;
+      if (aVal === undefined) return 1;
+      if (bVal === undefined) return -1;
+      const cmp = aVal > bVal ? 1 : -1;
+      return direction === -1 || direction === 'desc' ? -cmp : cmp;
+    }
+    return 0;
+  });
+}
+
+function applyUpdate(target, update) {
+  if (!update) return target;
+  if (update.$set) {
+    for (const [k, v] of Object.entries(update.$set)) {
+      if (k.includes('.')) {
+        const parts = k.split('.');
+        let curr = target;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!curr[parts[i]] || typeof curr[parts[i]] !== 'object') {
+            curr[parts[i]] = {};
+          }
+          curr = curr[parts[i]];
+        }
+        curr[parts[parts.length - 1]] = v;
+      } else {
+        target[k] = v;
+      }
+    }
+  } else {
+    Object.assign(target, update);
+  }
+  return target;
+}
+
+function wrapDoc(store, doc) {
+  if (!doc) return null;
+  const copy = { ...doc };
+  Object.defineProperty(copy, 'toObject', {
+    value: function () {
+      const { toObject, save, ...clean } = this;
+      return clean;
+    },
+    enumerable: false
+  });
+  Object.defineProperty(copy, 'save', {
+    value: async function () {
+      const idx = store.findIndex((d) => d.id === copy.id || (copy.type && d.type === copy.type));
+      if (idx !== -1) {
+        store[idx] = { ...this };
+      }
+      return this;
+    },
+    enumerable: false
+  });
+  return copy;
+}
+
+class InMemoryCollection {
+  constructor(initialData = []) {
+    this.data = initialData.map((d) => ({ ...d }));
+  }
+
+  find(filter = {}) {
+    let sortObj = null;
+    let isLean = false;
+    const self = this;
+
+    const queryObj = {
+      sort(criteria) {
+        sortObj = criteria;
+        return queryObj;
+      },
+      lean() {
+        isLean = true;
+        return queryObj;
+      },
+      then(resolve, reject) {
+        try {
+          let results = self.data.filter((d) => matchesFilter(d, filter));
+          if (sortObj) {
+            results = applySort(results, sortObj);
+          }
+          resolve(isLean ? results.map((d) => ({ ...d })) : results.map((d) => wrapDoc(self.data, d)));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    };
+    return queryObj;
+  }
+
+  findOne(filter = {}) {
+    let isLean = false;
+    const self = this;
+
+    const queryObj = {
+      lean() {
+        isLean = true;
+        return queryObj;
+      },
+      then(resolve, reject) {
+        try {
+          const found = self.data.find((d) => matchesFilter(d, filter));
+          if (!found) {
+            return resolve(null);
+          }
+          resolve(isLean ? { ...found } : wrapDoc(self.data, found));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    };
+    return queryObj;
+  }
+
+  async create(doc) {
+    const item = { ...doc };
+    if (!item.id && !item.type) {
+      item.id = `item-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    }
+    this.data.push(item);
+    return wrapDoc(this.data, item);
+  }
+
+  async findOneAndUpdate(filter, update, options = {}) {
+    let found = this.data.find((d) => matchesFilter(d, filter));
+    if (!found) {
+      if (options.upsert) {
+        const newDoc = { ...filter };
+        applyUpdate(newDoc, update);
+        this.data.push(newDoc);
+        return wrapDoc(this.data, newDoc);
+      }
+      return null;
+    }
+    applyUpdate(found, update);
+    return wrapDoc(this.data, found);
+  }
+
+  async findOneAndDelete(filter) {
+    const idx = this.data.findIndex((d) => matchesFilter(d, filter));
+    if (idx !== -1) {
+      const [removed] = this.data.splice(idx, 1);
+      return wrapDoc(this.data, removed);
+    }
+    return null;
+  }
+
+  async updateMany(filter, update) {
+    let modifiedCount = 0;
+    for (const item of this.data) {
+      if (matchesFilter(item, filter)) {
+        applyUpdate(item, update);
+        modifiedCount++;
+      }
+    }
+    return { modifiedCount };
+  }
+
+  async deleteMany(filter = {}) {
+    const originalLen = this.data.length;
+    this.data = this.data.filter((d) => !matchesFilter(d, filter));
+    return { deletedCount: originalLen - this.data.length };
+  }
+
+  async countDocuments(filter = {}) {
+    return this.data.filter((d) => matchesFilter(d, filter)).length;
+  }
+
+  async insertMany(docs = []) {
+    const created = docs.map((d) => ({ ...d }));
+    this.data.push(...created);
+    return created.map((d) => wrapDoc(this.data, d));
+  }
+}
+
+// Instantiate in-memory collections with default seed data
+const initialWhatsAppSettings = {
+  ...INITIAL_WHATSAPP_SETTINGS,
+  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || INITIAL_WHATSAPP_SETTINGS.phoneNumberId,
+  businessAccountId:
+    process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || INITIAL_WHATSAPP_SETTINGS.businessAccountId,
+  verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || INITIAL_WHATSAPP_SETTINGS.verifyToken,
+  webhookUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/webhook`
 };
+
+const inMemoryStores = {
+  TeamMember: new InMemoryCollection(INITIAL_TEAM_MEMBERS),
+  Contact: new InMemoryCollection([]),
+  Lead: new InMemoryCollection([]),
+  Conversation: new InMemoryCollection([]),
+  Message: new InMemoryCollection([]),
+  FollowUp: new InMemoryCollection([]),
+  KnowledgeBase: new InMemoryCollection(INITIAL_KNOWLEDGE_BASE),
+  KnowledgeGap: new InMemoryCollection([]),
+  Setting: new InMemoryCollection([
+    { type: 'aiSettings', data: INITIAL_AI_SETTINGS },
+    { type: 'whatsappSettings', data: initialWhatsAppSettings },
+    { type: 'companySettings', data: INITIAL_COMPANY_SETTINGS }
+  ]),
+  Notification: new InMemoryCollection([])
+};
+
+// Model proxy: routes dynamically to real Mongoose when connected (readyState === 1),
+// or the in-memory fallback collection when disconnected.
+function createModelProxy(realModel, modelName) {
+  const inMemory = inMemoryStores[modelName];
+  return new Proxy(realModel, {
+    get(target, prop) {
+      if (mongoose.connection.readyState === 1) {
+        const val = target[prop];
+        return typeof val === 'function' ? val.bind(target) : val;
+      }
+      if (inMemory && prop in inMemory) {
+        const val = inMemory[prop];
+        return typeof val === 'function' ? val.bind(inMemory) : val;
+      }
+      const val = target[prop];
+      return typeof val === 'function' ? val.bind(target) : val;
+    }
+  });
+}
+
+export const TeamMember = createModelProxy(RealTeamMember, 'TeamMember');
+export const Contact = createModelProxy(RealContact, 'Contact');
+export const Lead = createModelProxy(RealLead, 'Lead');
+export const Conversation = createModelProxy(RealConversation, 'Conversation');
+export const Message = createModelProxy(RealMessage, 'Message');
+export const FollowUp = createModelProxy(RealFollowUp, 'FollowUp');
+export const KnowledgeBase = createModelProxy(RealKnowledgeBase, 'KnowledgeBase');
+export const KnowledgeGap = createModelProxy(RealKnowledgeGap, 'KnowledgeGap');
+export const Setting = createModelProxy(RealSetting, 'Setting');
+export const Notification = createModelProxy(RealNotification, 'Notification');
 
 export async function purgeLegacyFakeDataAndEnsureDefaults() {
   try {
-    await Promise.all([
-      Contact.deleteMany({ id: { $in: FAKE_IDS.contacts } }),
-      Lead.deleteMany({ id: { $in: FAKE_IDS.leads } }),
-      Conversation.deleteMany({ id: { $in: FAKE_IDS.conversations } }),
-      Message.deleteMany({ id: { $in: FAKE_IDS.messages } }),
-      FollowUp.deleteMany({ id: { $in: FAKE_IDS.followUps } }),
-      TeamMember.deleteMany({ id: { $in: FAKE_IDS.teamMembers } }),
-      KnowledgeBase.deleteMany({ id: { $in: FAKE_IDS.knowledgeBase } }),
-      KnowledgeGap.deleteMany({ id: { $in: FAKE_IDS.knowledgeGaps } }),
-      Notification.deleteMany({ id: { $in: FAKE_IDS.notifications } })
-    ]);
-
-    // Ensure at least 1 real Admin user exists so RBAC & login work seamlessly
     const teamCount = await TeamMember.countDocuments();
     if (teamCount === 0) {
       await TeamMember.insertMany(INITIAL_TEAM_MEMBERS);
     }
 
-    // Ensure settings exist with real environment variable defaults
-    const envWhatsAppSettings = {
-      ...INITIAL_WHATSAPP_SETTINGS,
-      phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || INITIAL_WHATSAPP_SETTINGS.phoneNumberId,
-      businessAccountId:
-        process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || INITIAL_WHATSAPP_SETTINGS.businessAccountId,
-      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || INITIAL_WHATSAPP_SETTINGS.verifyToken,
-      webhookUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/webhook`
-    };
-
     const existingWa = await Setting.findOne({ type: 'whatsappSettings' });
-    if (!existingWa || existingWa.data?.phoneNumberId === '109283746512345') {
-      await Setting.findOneAndUpdate(
-        { type: 'whatsappSettings' },
-        { type: 'whatsappSettings', data: envWhatsAppSettings },
-        { upsert: true, new: true }
-      );
+    if (!existingWa) {
+      await Setting.create({ type: 'whatsappSettings', data: initialWhatsAppSettings });
     }
-
-    const envProvider = String(process.env.AI_PROVIDER || INITIAL_AI_SETTINGS.provider).toUpperCase();
-    const envModel =
-      envProvider === 'GEMINI'
-        ? process.env.GEMINI_MODEL || INITIAL_AI_SETTINGS.model
-        : process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
     const existingAi = await Setting.findOne({ type: 'aiSettings' });
     if (!existingAi) {
-      await Setting.create({
-        type: 'aiSettings',
-        data: { ...INITIAL_AI_SETTINGS, provider: envProvider, model: envModel }
-      });
-    } else if (
-      existingAi.data?.model === 'gemini-3.8-flash' ||
-      existingAi.data?.model === 'gpt-4o-mini' ||
-      existingAi.data?.provider !== envProvider ||
-      String(existingAi.data?.systemPrompt || '').includes('TechNova')
-    ) {
-      await Setting.findOneAndUpdate(
-        { type: 'aiSettings' },
-        {
-          $set: {
-            'data.provider': envProvider,
-            'data.model': envModel,
-            'data.systemPrompt': INITIAL_AI_SETTINGS.systemPrompt
-          }
-        }
-      );
+      await Setting.create({ type: 'aiSettings', data: INITIAL_AI_SETTINGS });
     }
 
     const existingCompany = await Setting.findOne({ type: 'companySettings' });
-    if (
-      !existingCompany ||
-      existingCompany.data?.name === 'TechNova Digital Solutions Pvt Ltd'
-    ) {
-      await Setting.findOneAndUpdate(
-        { type: 'companySettings' },
-        { type: 'companySettings', data: INITIAL_COMPANY_SETTINGS },
-        { upsert: true, new: true }
-      );
+    if (!existingCompany) {
+      await Setting.create({ type: 'companySettings', data: INITIAL_COMPANY_SETTINGS });
     }
 
-    console.log('[db] Fake dummy records purged & clean database state verified.');
+    const kbCount = await KnowledgeBase.countDocuments();
+    if (kbCount === 0 && INITIAL_KNOWLEDGE_BASE.length > 0) {
+      await KnowledgeBase.insertMany(INITIAL_KNOWLEDGE_BASE);
+    }
   } catch (err) {
-    console.error('[db] Error during fake data cleanup:', err.message);
+    console.warn('[db] ensure defaults notice:', err.message);
   }
 }
 
@@ -362,38 +546,21 @@ export async function connectDB() {
 
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.warn(
-      '[db] MONGODB_URI is not defined in environment variables. Database connection skipped.'
-    );
+    console.log('[db] MONGODB_URI not configured — in-memory fallback active.');
     return null;
   }
 
   try {
-    mongoose.connection.on('connected', () => {
-      isConnected = true;
-      console.log(
-        `[db] MongoDB connected successfully to database: ${mongoose.connection.name}`
-      );
-    });
-
-    mongoose.connection.on('error', (err) => {
-      console.error('[db] MongoDB connection error:', err.message);
-    });
-
-    mongoose.connection.on('disconnected', () => {
-      isConnected = false;
-      console.warn('[db] MongoDB disconnected.');
-    });
-
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 8000
+      serverSelectionTimeoutMS: 3000
     });
-
     isConnected = true;
+    console.log(`[db] MongoDB connected successfully to database: ${mongoose.connection.name}`);
     await purgeLegacyFakeDataAndEnsureDefaults();
     return conn;
   } catch (error) {
-    console.error('[db] Failed to connect to MongoDB:', error.message);
+    isConnected = false;
+    console.warn('[db] MongoDB unavailable, using in-memory store:', error.message);
     return null;
   }
 }

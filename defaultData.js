@@ -19,7 +19,48 @@ export const INITIAL_LEADS = [];
 export const INITIAL_CONVERSATIONS = [];
 export const INITIAL_MESSAGES = {};
 export const INITIAL_FOLLOW_UPS = [];
-export const INITIAL_KNOWLEDGE_BASE = [];
+export const INITIAL_KNOWLEDGE_BASE = [
+  {
+    id: 'kb-1',
+    category: 'SERVICES',
+    title: 'Custom Web & Mobile App Development',
+    content: 'We build responsive web applications with React, Next.js, and Node.js, as well as native/cross-platform mobile apps. Project costs typically start at ₹75,000 with timelines ranging between 4 to 8 weeks depending on specifications.',
+    keywords: ['web development', 'mobile app', 'website', 'application', 'software', 'app'],
+    isActive: true,
+    updatedAt: new Date().toISOString().slice(0, 10),
+    usageCount: 12
+  },
+  {
+    id: 'kb-2',
+    category: 'PRICING',
+    title: 'Standard Pricing & Payment Milestones',
+    content: 'Our typical billing structure consists of 30% advance deposit upon contract signing, 40% upon completion of core milestones and staging demo, and 30% upon final deployment and handoff. Custom quote requests receive detailed estimates within 24 business hours.',
+    keywords: ['price', 'pricing', 'cost', 'budget', 'rate', 'payment', 'quote', 'discount'],
+    isActive: true,
+    updatedAt: new Date().toISOString().slice(0, 10),
+    usageCount: 18
+  },
+  {
+    id: 'kb-3',
+    category: 'SERVICES',
+    title: 'WhatsApp AI Automation & CRM Integration',
+    content: 'We deploy official Meta WhatsApp Cloud API bots powered by Google Gemini and OpenAI models. Includes lead qualification, automated quotation generation, human handoff triggers, and webhook integrations into internal CRMs starting at ₹35,000.',
+    keywords: ['whatsapp', 'crm', 'ai bot', 'automation', 'chat', 'meta cloud api'],
+    isActive: true,
+    updatedAt: new Date().toISOString().slice(0, 10),
+    usageCount: 25
+  },
+  {
+    id: 'kb-4',
+    category: 'FAQ',
+    title: 'Support, Maintenance & SLA Details',
+    content: 'All custom development projects include 30 days of complimentary post-launch support and bug fixes. Extended 24/7 SLA maintenance contracts are available on quarterly or annual retainers.',
+    keywords: ['support', 'warranty', 'maintenance', 'sla', 'bug fix', 'hosting'],
+    isActive: true,
+    updatedAt: new Date().toISOString().slice(0, 10),
+    usageCount: 8
+  }
+];
 export const INITIAL_KNOWLEDGE_GAPS = [];
 export const INITIAL_STRATEGIC_FINDINGS = [];
 export const INITIAL_NOTIFICATIONS = [];

@@ -29,7 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET;
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 const DIST_DIR = path.join(__dirname, 'dist');
 const WEBHOOK_PATHS = new Set(['/webhook', '/api/webhooks/whatsapp', '/health']);
 
@@ -1820,30 +1820,30 @@ app.post('/api/notifications/read-all', async (_req, res) => {
 });
 
 // ============================================================================
-// FRONTEND SERVING (VITE MIDDLEWARE IN DEV, STATIC DIST IN PROD)
+// FRONTEND SERVING (STATIC DIST IN PROD, VITE MIDDLEWARE IN DEV)
 // ============================================================================
 async function startServer() {
-  if (!IS_PRODUCTION) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
-  } else if (fs.existsSync(DIST_DIR)) {
-    app.use(express.static(DIST_DIR, { index: false }));
+  const hasDist = fs.existsSync(path.join(DIST_DIR, 'index.html'));
+  if (IS_PRODUCTION && hasDist) {
+    app.use(express.static(DIST_DIR));
 
     app.get(/.*/, (req, res, next) => {
       if (
         req.method !== 'GET' ||
         req.path.startsWith('/api') ||
-        req.path.startsWith('/assets/') ||
         WEBHOOK_PATHS.has(req.path)
       ) {
         return next();
       }
       res.sendFile(path.join(DIST_DIR, 'index.html'));
     });
+  } else {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa'
+    });
+    app.use(vite.middlewares);
   }
 
   const WEBHOOK_ENV_REQUIRED = ['WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET'];

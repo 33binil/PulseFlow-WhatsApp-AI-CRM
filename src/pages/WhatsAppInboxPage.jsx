@@ -70,11 +70,18 @@ export const WhatsAppInboxPage = () => {
 
   useEffect(() => {
     const paramId = searchParams.get('convId');
-    if (paramId && conversations.some((c) => c.id === paramId)) {
-      setSelectedConvId(paramId);
-      markConversationRead(paramId);
-    } else if (!selectedConvId && conversations[0]?.id) {
-      setSelectedConvId(conversations[0].id);
+    if (paramId) {
+      const match = conversations.find((c) => c.id === paramId);
+      if (match) {
+        setSelectedConvId((prev) => (prev === paramId ? prev : paramId));
+        if (match.unreadCount > 0) {
+          markConversationRead(paramId);
+        }
+      }
+    } else if (conversations.length > 0) {
+      setSelectedConvId((prev) =>
+        prev && conversations.some((c) => c.id === prev) ? prev : conversations[0].id
+      );
     }
   }, [searchParams, conversations]);
 
@@ -111,8 +118,13 @@ export const WhatsAppInboxPage = () => {
 
   const handleSelectConversation = (convId) => {
     setSelectedConvId(convId);
-    setSearchParams({ convId });
-    markConversationRead(convId);
+    if (searchParams.get('convId') !== convId) {
+      setSearchParams({ convId }, { replace: true });
+    }
+    const match = conversations.find((c) => c.id === convId);
+    if (match && match.unreadCount > 0) {
+      markConversationRead(convId);
+    }
   };
 
   const enrichedConversations = useMemo(() => {

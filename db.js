@@ -1,7 +1,14 @@
 import mongoose from 'mongoose';
 import {
   INITIAL_TEAM_MEMBERS,
+  INITIAL_CONTACTS,
+  INITIAL_LEADS,
+  INITIAL_CONVERSATIONS,
+  INITIAL_MESSAGES,
+  INITIAL_FOLLOW_UPS,
   INITIAL_KNOWLEDGE_BASE,
+  INITIAL_KNOWLEDGE_GAPS,
+  INITIAL_NOTIFICATIONS,
   INITIAL_AI_SETTINGS,
   INITIAL_WHATSAPP_SETTINGS,
   INITIAL_COMPANY_SETTINGS
@@ -458,21 +465,23 @@ const initialWhatsAppSettings = {
   webhookUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/webhook`
 };
 
+const initialMessagesList = Object.values(INITIAL_MESSAGES).flat();
+
 const inMemoryStores = {
   TeamMember: new InMemoryCollection(INITIAL_TEAM_MEMBERS),
-  Contact: new InMemoryCollection([]),
-  Lead: new InMemoryCollection([]),
-  Conversation: new InMemoryCollection([]),
-  Message: new InMemoryCollection([]),
-  FollowUp: new InMemoryCollection([]),
+  Contact: new InMemoryCollection(INITIAL_CONTACTS),
+  Lead: new InMemoryCollection(INITIAL_LEADS),
+  Conversation: new InMemoryCollection(INITIAL_CONVERSATIONS),
+  Message: new InMemoryCollection(initialMessagesList),
+  FollowUp: new InMemoryCollection(INITIAL_FOLLOW_UPS),
   KnowledgeBase: new InMemoryCollection(INITIAL_KNOWLEDGE_BASE),
-  KnowledgeGap: new InMemoryCollection([]),
+  KnowledgeGap: new InMemoryCollection(INITIAL_KNOWLEDGE_GAPS),
   Setting: new InMemoryCollection([
     { type: 'aiSettings', data: INITIAL_AI_SETTINGS },
     { type: 'whatsappSettings', data: initialWhatsAppSettings },
     { type: 'companySettings', data: INITIAL_COMPANY_SETTINGS }
   ]),
-  Notification: new InMemoryCollection([])
+  Notification: new InMemoryCollection(INITIAL_NOTIFICATIONS)
 };
 
 // Model proxy: routes dynamically to real Mongoose when connected (readyState === 1),

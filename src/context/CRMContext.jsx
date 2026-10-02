@@ -58,11 +58,50 @@ export const CRMProvider = ({ children }) => {
           return found || data.teamMembers[0];
         });
       }
-      if (Array.isArray(data.contacts)) setContacts(data.contacts);
-      if (Array.isArray(data.leads)) setLeads(data.leads);
-      if (Array.isArray(data.conversations)) setConversations(data.conversations);
+      if (Array.isArray(data.contacts)) {
+        setContacts((prev) => (prev.length === data.contacts.length ? prev : data.contacts));
+      }
+      if (Array.isArray(data.leads)) {
+        setLeads((prev) => (prev.length === data.leads.length ? prev : data.leads));
+      }
+      if (Array.isArray(data.conversations)) {
+        setConversations((prev) => {
+          if (
+            prev.length === data.conversations.length &&
+            prev.every((p, idx) => {
+              const n = data.conversations[idx];
+              return (
+                n &&
+                p.id === n.id &&
+                p.unreadCount === n.unreadCount &&
+                p.lastMessage === n.lastMessage &&
+                p.aiEnabled === n.aiEnabled &&
+                p.needsHumanAttention === n.needsHumanAttention
+              );
+            })
+          ) {
+            return prev;
+          }
+          return data.conversations;
+        });
+      }
       if (data.messagesByConv && typeof data.messagesByConv === 'object') {
-        setMessagesByConv(data.messagesByConv);
+        setMessagesByConv((prev) => {
+          let hasDiff = false;
+          const prevKeys = Object.keys(prev);
+          const newKeys = Object.keys(data.messagesByConv);
+          if (prevKeys.length !== newKeys.length) {
+            hasDiff = true;
+          } else {
+            for (const k of newKeys) {
+              if ((prev[k]?.length || 0) !== (data.messagesByConv[k]?.length || 0)) {
+                hasDiff = true;
+                break;
+              }
+            }
+          }
+          return hasDiff ? data.messagesByConv : prev;
+        });
       }
       if (Array.isArray(data.followUps)) setFollowUps(data.followUps);
       if (Array.isArray(data.knowledgeBase)) setKnowledgeBase(data.knowledgeBase);
@@ -350,14 +389,23 @@ export const CRMProvider = ({ children }) => {
 
   // Conversations & WhatsApp Inbox Actions (Persisted to MongoDB)
   const markConversationRead = (conversationId) => {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
-    );
-    fetch(`/api/conversations/${conversationId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patch: { unreadCount: 0 } })
-    }).catch(() => {});
+    let hadUnread = false;
+    setConversations((prev) => {
+      const target = prev.find((c) => c.id === conversationId);
+      if (!target || !target.unreadCount || target.unreadCount <= 0) {
+        return prev;
+      }
+      hadUnread = true;
+      return prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c));
+    });
+
+    if (hadUnread) {
+      fetch(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patch: { unreadCount: 0 } })
+      }).catch(() => {});
+    }
   };
 
   const takeOverConversation = (conversationId) => {
@@ -664,8 +712,16 @@ export const CRMProvider = ({ children }) => {
 
   // Notifications (Persisted to MongoDB)
   const markNotificationRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-    fetch(`/api/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+    let hadUnread = false;
+    setNotifications((prev) => {
+      const target = prev.find((n) => n.id === id);
+      if (!target || target.isRead) return prev;
+      hadUnread = true;
+      return prev.map((n) => (n.id === id ? { ...n, isRead: true } : n));
+    });
+    if (hadUnread) {
+      fetch(`/api/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+    }
   };
 
   const markAllNotificationsRead = () => {

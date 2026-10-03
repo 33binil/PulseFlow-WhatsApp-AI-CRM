@@ -20,7 +20,8 @@ import {
   ChevronUp,
   HelpCircle,
   Plus,
-  MessageSquare
+  MessageSquare,
+  Trash2
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
@@ -34,6 +35,8 @@ export const WhatsAppInboxPage = () => {
     currentUser,
     addContact,
     addLead,
+    deleteConversation,
+    startOrOpenConversation,
     sendAgentMessage,
     simulateCustomerIncomingMessage,
     takeOverConversation,
@@ -77,26 +80,61 @@ export const WhatsAppInboxPage = () => {
         if (match.unreadCount > 0) {
           markConversationRead(paramId);
         }
+      } else if (conversations.length > 0) {
+        const fallbackId = conversations[0].id;
+        setSelectedConvId(fallbackId);
+        setSearchParams({ convId: fallbackId }, { replace: true });
+      } else {
+        setSelectedConvId('');
+        setSearchParams({}, { replace: true });
       }
     } else if (conversations.length > 0) {
       setSelectedConvId((prev) =>
         prev && conversations.some((c) => c.id === prev) ? prev : conversations[0].id
       );
+    } else {
+      setSelectedConvId((prev) => (prev === '' ? prev : ''));
     }
   }, [searchParams, conversations]);
 
-  const handleCreateNewChat = (e) => {
+  const handleCreateNewChat = async (e) => {
     e.preventDefault();
     if (!newChatName.trim() || !newChatPhone.trim()) return;
-    const createdContact = addContact({
-      name: newChatName.trim(),
-      phone: newChatPhone.trim(),
-      email: '',
-      company: 'Direct WhatsApp Inquiry',
-      location: '',
-      source: 'WhatsApp Inbound',
-      tags: ['WhatsApp Lead', newChatService]
-    });
+
+    const inputDigits = newChatPhone.replace(/[^0-9]/g, '');
+    const suffix = inputDigits.slice(-10);
+    const existingContact =
+      suffix.length >= 7
+        ? contacts.find((c) => String(c.phone).replace(/[^0-9]/g, '').endsWith(suffix))
+        : null;
+
+    if (existingContact) {
+      const existingLead = leads.find((l) => l.contactId === existingContact.id);
+      const reopenedConv = await startOrOpenConversation(
+        existingContact.id,
+        existingLead?.id || ''
+      );
+      if (reopenedConv?.id) {
+        handleSelectConversation(reopenedConv.id);
+      }
+      setNewChatName('');
+      setNewChatPhone('+91 ');
+      setShowNewChatModal(false);
+      return;
+    }
+
+    const createdContact = addContact(
+      {
+        name: newChatName.trim(),
+        phone: newChatPhone.trim(),
+        email: '',
+        company: 'Direct WhatsApp Inquiry',
+        location: '',
+        source: 'WhatsApp Inbound',
+        tags: ['WhatsApp Lead', newChatService]
+      },
+      { createLead: false, createConversation: false }
+    );
     addLead({
       contactId: createdContact.id,
       leadStatus: 'NEW',
@@ -114,6 +152,20 @@ export const WhatsAppInboxPage = () => {
     setNewChatName('');
     setNewChatPhone('+91 ');
     setShowNewChatModal(false);
+  };
+
+  const handleDeleteConversation = (convId) => {
+    const remaining = conversations.filter((c) => c.id !== convId);
+    const nextConvId = remaining[0]?.id || '';
+    deleteConversation(convId);
+    if (selectedConvId === convId || activeItem?.conv?.id === convId) {
+      setSelectedConvId(nextConvId);
+      if (nextConvId) {
+        setSearchParams({ convId: nextConvId }, { replace: true });
+      } else {
+        setSearchParams({}, { replace: true });
+      }
+    }
   };
 
   const handleSelectConversation = (convId) => {
@@ -375,13 +427,17 @@ export const WhatsAppInboxPage = () => {
                             ? 'text-emerald-700'
                             : itemLead?.leadType === 'WARM'
                             ? 'text-amber-700'
-                            : 'text-slate-600'
+                            : 'text-slate-500'
                         }`}
                       >
-                        {itemLead?.leadType || 'LEAD'}
+                        {itemLead?.leadType || 'No Lead'}
                       </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono text-slate-700">{itemLead?.budget}</span>
+                      {itemLead?.budget ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="font-mono text-slate-700">{itemLead.budget}</span>
+                        </>
+                      ) : null}
                       <span aria-hidden="true">·</span>
                       <span className="text-indigo-700 font-medium">{itemConv.language}</span>
                     </div>
@@ -398,6 +454,17 @@ export const WhatsAppInboxPage = () => {
                           {itemConv.unreadCount} new
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteConversation(itemConv.id);
+                        }}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                        title="Delete Chat from Inbox"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -436,7 +503,7 @@ export const WhatsAppInboxPage = () => {
             </div>
           </div>
 
-          {/* Simple Controls: Test Sample Message + Take Over / Let AI Reply */}
+          {/* Simple Controls: Test Sample Message + Take Over / Let AI Reply + Delete Chat */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSimBar((prev) => !prev)}
@@ -465,6 +532,16 @@ export const WhatsAppInboxPage = () => {
                 <span>Let AI Reply Again</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => handleDeleteConversation(conv.id)}
+              className="px-3 py-1.5 text-xs font-semibold border border-rose-200 rounded-lg bg-rose-50/80 hover:bg-rose-100 text-rose-700 transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+              title="Remove this conversation and its local messages from WhatsApp Inbox (Contact & Lead are preserved)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Delete Chat</span>
+            </button>
           </div>
         </div>
 

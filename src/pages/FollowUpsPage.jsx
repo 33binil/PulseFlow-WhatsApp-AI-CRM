@@ -125,14 +125,22 @@ export const FollowUpsPage = () => {
               {rows.map(({ fu, lead, contact, agent }) => (
                 <tr key={fu.id} className="hover:bg-slate-50">
                   <td className="py-3 px-3">
-                    <Link
-                      to={`/leads/${fu.leadId}`}
-                      className="font-bold text-slate-900 hover:underline"
-                    >
-                      {contact?.name}
-                    </Link>
+                    {lead ? (
+                      <Link
+                        to={`/leads/${lead.id}`}
+                        className="font-bold text-slate-900 hover:underline"
+                      >
+                        {contact?.name || 'Customer'}
+                      </Link>
+                    ) : (
+                      <span className="font-bold text-slate-900">
+                        {contact?.name || 'Customer'}
+                      </span>
+                    )}
                     <div className="text-[11px] text-slate-500">
-                      {lead?.interestedService} · Score: {lead?.leadScore}
+                      {lead
+                        ? `${lead.interestedService} · Score: ${lead.leadScore}`
+                        : 'No linked lead'}
                     </div>
                   </td>
                   <td className="py-3 px-3 font-mono text-slate-800 tabular-nums">

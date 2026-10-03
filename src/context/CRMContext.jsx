@@ -59,10 +59,40 @@ export const CRMProvider = ({ children }) => {
         });
       }
       if (Array.isArray(data.contacts)) {
-        setContacts((prev) => (prev.length === data.contacts.length ? prev : data.contacts));
+        setContacts((prev) => {
+          if (
+            prev.length === data.contacts.length &&
+            prev.every((p, idx) => {
+              const n = data.contacts[idx];
+              return n && p.id === n.id && p.name === n.name && p.phone === n.phone && p.totalMessages === n.totalMessages;
+            })
+          ) {
+            return prev;
+          }
+          return data.contacts;
+        });
       }
       if (Array.isArray(data.leads)) {
-        setLeads((prev) => (prev.length === data.leads.length ? prev : data.leads));
+        setLeads((prev) => {
+          if (
+            prev.length === data.leads.length &&
+            prev.every((p, idx) => {
+              const n = data.leads[idx];
+              return (
+                n &&
+                p.id === n.id &&
+                p.leadScore === n.leadScore &&
+                p.leadStatus === n.leadStatus &&
+                p.leadType === n.leadType &&
+                p.conversationId === n.conversationId &&
+                p.budget === n.budget
+              );
+            })
+          ) {
+            return prev;
+          }
+          return data.leads;
+        });
       }
       if (Array.isArray(data.conversations)) {
         setConversations((prev) => {
@@ -73,6 +103,8 @@ export const CRMProvider = ({ children }) => {
               return (
                 n &&
                 p.id === n.id &&
+                p.leadId === n.leadId &&
+                p.status === n.status &&
                 p.unreadCount === n.unreadCount &&
                 p.lastMessage === n.lastMessage &&
                 p.aiEnabled === n.aiEnabled &&
@@ -196,13 +228,13 @@ export const CRMProvider = ({ children }) => {
   };
 
   // Contacts CRUD (Persisted to MongoDB)
-  const addContact = (contact) => {
+  const addContact = (contact, options = {}) => {
     const created = {
       ...contact,
       id: `cnt-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       createdAt: new Date().toISOString().slice(0, 10),
       lastInteractionAt: 'Just now',
-      totalConversations: 1,
+      totalConversations: options.createConversation === false ? 0 : 1,
       totalMessages: 0,
       notes: []
     };
@@ -213,7 +245,9 @@ export const CRMProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...created,
-        assignedAgentId: currentUser?.id || 'admin-1'
+        assignedAgentId: currentUser?.id || 'admin-1',
+        createLead: options.createLead ?? true,
+        createConversation: options.createConversation ?? true
       })
     })
       .then((r) => r.json())
@@ -362,10 +396,18 @@ export const CRMProvider = ({ children }) => {
   const deleteLead = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
     setFollowUps((prev) => prev.filter((f) => f.leadId !== id));
+    // Unlink leadId on any related WhatsApp conversation while preserving the conversation and contact
+    setConversations((prev) =>
+      prev.map((c) => (c.leadId === id ? { ...c, leadId: '' } : c))
+    );
     fetch(`/api/leads/${id}`, { method: 'DELETE' }).catch((err) =>
       console.error('Failed to delete lead:', err)
     );
-    pushToast('Lead Deleted', 'Lead removed from database.', 'warning');
+    pushToast(
+      'Lead Deleted',
+      'Sales lead removed. Related WhatsApp conversation and contact are preserved.',
+      'warning'
+    );
   };
 
   const addLeadNote = (leadId, content) => {
@@ -388,6 +430,92 @@ export const CRMProvider = ({ children }) => {
   };
 
   // Conversations & WhatsApp Inbox Actions (Persisted to MongoDB)
+  const deleteConversation = (conversationId) => {
+    const targetConv = conversations.find((c) => c.id === conversationId);
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    setMessagesByConv((prev) => {
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
+    // Unlink conversationId on any related Lead while preserving both Lead and Contact
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.conversationId === conversationId || (targetConv?.leadId && l.id === targetConv.leadId)
+          ? { ...l, conversationId: '' }
+          : l
+      )
+    );
+    fetch(`/api/conversations/${conversationId}`, { method: 'DELETE' }).catch((err) =>
+      console.error('Failed to delete conversation:', err)
+    );
+    pushToast(
+      'Chat Deleted',
+      'WhatsApp conversation removed from Inbox. Customer contact and lead are preserved.',
+      'warning'
+    );
+  };
+
+  const startOrOpenConversation = async (contactId, leadId = '') => {
+    const existing = conversations.find(
+      (c) => c.contactId === contactId || (leadId && c.leadId === leadId)
+    );
+    if (existing) {
+      return existing;
+    }
+
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const contact = contacts.find((c) => c.id === contactId);
+    const lead = leads.find((l) => (leadId && l.id === leadId) || l.contactId === contactId);
+    const newConvId = `conv-${Date.now()}`;
+
+    const optimisticConv = {
+      id: newConvId,
+      contactId,
+      leadId: lead ? lead.id : leadId || '',
+      assignedAgentId: lead?.assignedAgentId || currentUser?.id || 'admin-1',
+      status: 'OPEN',
+      aiEnabled: true,
+      needsHumanAttention: false,
+      unreadCount: 0,
+      lastMessage: 'WhatsApp conversation opened in CRM',
+      lastMessageTime: nowStr,
+      language: contact?.preferredLanguage || 'English',
+      keyFinding: lead?.aiSummary || `Active WhatsApp conversation with ${contact?.name || 'customer'}`
+    };
+
+    setConversations((prev) => [optimisticConv, ...prev]);
+    setMessagesByConv((prev) => ({ ...prev, [newConvId]: prev[newConvId] || [] }));
+    if (lead) {
+      setLeads((prev) =>
+        prev.map((l) => (l.id === lead.id ? { ...l, conversationId: newConvId } : l))
+      );
+    }
+
+    try {
+      const res = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newConvId,
+          contactId,
+          leadId: lead ? lead.id : leadId || '',
+          assignedAgentId: lead?.assignedAgentId || currentUser?.id || 'admin-1'
+        })
+      });
+      const data = await res.json();
+      if (data?.conversation) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === newConvId ? data.conversation : c))
+        );
+        return data.conversation;
+      }
+    } catch (err) {
+      console.error('Failed to open conversation:', err);
+    }
+    return optimisticConv;
+  };
+
   const markConversationRead = (conversationId) => {
     let hadUnread = false;
     setConversations((prev) => {
@@ -756,6 +884,8 @@ export const CRMProvider = ({ children }) => {
         addLeadNote,
         conversations,
         messagesByConv,
+        deleteConversation,
+        startOrOpenConversation,
         sendAgentMessage,
         simulateCustomerIncomingMessage,
         takeOverConversation,

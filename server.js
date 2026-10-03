@@ -1535,48 +1535,50 @@ app.post('/api/contacts', async (req, res) => {
       totalMessages: 0
     });
 
-    // Also create a default Lead and Conversation so this contact is fully initialized across all CRM views
     const leadId = `ld-${Date.now()}`;
     const convId = `conv-${Date.now()}`;
 
-    const createdLead = await Lead.create({
-      id: leadId,
-      contactId: createdContact.id,
-      conversationId: convId,
-      leadStatus: 'NEW',
-      leadType: 'WARM',
-      leadScore: 50,
-      scoreBreakdown: {
-        budgetReadiness: 12,
-        needSpecificity: 12,
-        timelineUrgency: 10,
-        decisionAuthority: 8,
-        engagementDepth: 8
-      },
-      interestedService: (req.body.tags && req.body.tags[0]) || 'General Inquiry',
-      budget: 'Not disclosed',
-      estimatedValueInr: 0,
-      timeline: 'Not specified',
-      requirements: [],
-      buyingSignals: ['New contact added to CRM'],
-      detectedObjections: [],
-      recommendedNextAction: 'Review customer requirements and send initial response.',
-      source: createdContact.source || 'WhatsApp Inbound',
-      assignedAgentId: req.body.assignedAgentId || 'admin-1',
-      aiSummary: `New contact ${createdContact.name} created.`,
-      purchaseIntent: false,
-      lastInteractionAt: 'Just now',
-      createdAt: todayStr,
-      updatedAt: todayStr,
-      notes: []
-    });
+    let createdLead = null;
+    if (req.body.createLead !== false) {
+      createdLead = await Lead.create({
+        id: leadId,
+        contactId: createdContact.id,
+        conversationId: req.body.createConversation !== false ? convId : '',
+        leadStatus: 'NEW',
+        leadType: 'WARM',
+        leadScore: 50,
+        scoreBreakdown: {
+          budgetReadiness: 12,
+          needSpecificity: 12,
+          timelineUrgency: 10,
+          decisionAuthority: 8,
+          engagementDepth: 8
+        },
+        interestedService: (req.body.tags && req.body.tags[0]) || 'General Inquiry',
+        budget: 'Not disclosed',
+        estimatedValueInr: 0,
+        timeline: 'Not specified',
+        requirements: [],
+        buyingSignals: ['New contact added to CRM'],
+        detectedObjections: [],
+        recommendedNextAction: 'Review customer requirements and send initial response.',
+        source: createdContact.source || 'WhatsApp Inbound',
+        assignedAgentId: req.body.assignedAgentId || 'admin-1',
+        aiSummary: `New contact ${createdContact.name} created.`,
+        purchaseIntent: false,
+        lastInteractionAt: 'Just now',
+        createdAt: todayStr,
+        updatedAt: todayStr,
+        notes: []
+      });
+    }
 
     let createdConversation = null;
     if (req.body.createConversation !== false) {
       createdConversation = await Conversation.create({
         id: convId,
         contactId: createdContact.id,
-        leadId: createdLead.id,
+        leadId: createdLead ? createdLead.id : '',
         assignedAgentId: req.body.assignedAgentId || 'admin-1',
         status: 'OPEN',
         aiEnabled: true,
@@ -1660,9 +1662,9 @@ app.post('/api/leads', async (req, res) => {
       req.body.estimatedValueInr ??
       (parseInt(String(req.body.budget || '').replace(/[^0-9]/g, ''), 10) || 0);
 
-    // Ensure a Conversation exists for this contact so the lead is linked to a real chat
+    // Link to existing conversation for this contact if present, or create one unless disabled
     let conv = await Conversation.findOne({ contactId: req.body.contactId });
-    if (!conv) {
+    if (!conv && req.body.createConversation !== false) {
       conv = await Conversation.create({
         id: `conv-${Date.now()}`,
         contactId: req.body.contactId,
@@ -1679,7 +1681,7 @@ app.post('/api/leads', async (req, res) => {
           req.body.aiSummary ||
           `Interested in ${req.body.interestedService} · Budget: ${req.body.budget}`
       });
-    } else if (!conv.leadId) {
+    } else if (conv) {
       conv.leadId = leadId;
       await conv.save();
     }
@@ -1687,7 +1689,7 @@ app.post('/api/leads', async (req, res) => {
     const createdLead = await Lead.create({
       id: leadId,
       contactId: req.body.contactId,
-      conversationId: conv.id,
+      conversationId: conv ? conv.id : '',
       leadStatus: req.body.leadStatus || 'NEW',
       leadType: req.body.leadType || (score >= 81 ? 'HOT' : score >= 31 ? 'WARM' : 'COLD'),
       leadScore: score,
@@ -1755,9 +1757,14 @@ app.patch('/api/leads/:id', async (req, res) => {
 
 app.delete('/api/leads/:id', async (req, res) => {
   try {
-    await Lead.findOneAndDelete({ id: req.params.id });
-    await FollowUp.deleteMany({ leadId: req.params.id });
-    res.json({ deleted: true });
+    const leadId = req.params.id;
+    await Promise.all([
+      Lead.findOneAndDelete({ id: leadId }),
+      FollowUp.deleteMany({ leadId }),
+      // Unlink leadId from any related WhatsApp conversation while preserving the conversation and contact
+      Conversation.updateMany({ leadId }, { $set: { leadId: '' } })
+    ]);
+    res.json({ deleted: true, leadId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1783,6 +1790,84 @@ app.post('/api/leads/:id/notes', async (req, res) => {
 });
 
 // 5. Conversations & WhatsApp Messages
+app.post('/api/conversations', async (req, res) => {
+  try {
+    const { contactId, leadId, assignedAgentId } = req.body || {};
+    if (!contactId) {
+      return res.status(400).json({ error: 'contactId is required' });
+    }
+
+    let existingConv = await Conversation.findOne({ contactId });
+    const contact = await Contact.findOne({ id: contactId });
+    const lead = leadId
+      ? await Lead.findOne({ id: leadId })
+      : await Lead.findOne({ contactId });
+
+    if (existingConv) {
+      if (lead && !existingConv.leadId) {
+        existingConv.leadId = lead.id;
+        await existingConv.save();
+      }
+      if (lead && lead.conversationId !== existingConv.id) {
+        lead.conversationId = existingConv.id;
+        await lead.save();
+      }
+      return res.json({
+        conversation: cleanDoc(existingConv),
+        created: false
+      });
+    }
+
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const convId = req.body.id || `conv-${Date.now()}`;
+
+    const createdConv = await Conversation.create({
+      id: convId,
+      contactId,
+      leadId: lead ? lead.id : leadId || '',
+      assignedAgentId: assignedAgentId || lead?.assignedAgentId || 'admin-1',
+      status: 'OPEN',
+      aiEnabled: true,
+      needsHumanAttention: false,
+      unreadCount: 0,
+      lastMessage: 'WhatsApp conversation opened in CRM',
+      lastMessageTime: nowStr,
+      language: contact?.preferredLanguage || 'English',
+      keyFinding: lead?.aiSummary || `Active WhatsApp conversation with ${contact?.name || 'customer'}`
+    });
+
+    if (lead) {
+      lead.conversationId = createdConv.id;
+      await lead.save();
+    }
+
+    res.status(201).json({
+      conversation: cleanDoc(createdConv),
+      created: true
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/conversations/:id', async (req, res) => {
+  try {
+    const convId = req.params.id;
+    const existing = await Conversation.findOne({ id: convId });
+    const updates = [
+      Conversation.findOneAndDelete({ id: convId }),
+      Message.deleteMany({ conversationId: convId }),
+      Lead.updateMany({ conversationId: convId }, { $set: { conversationId: '' } })
+    ];
+    if (existing?.leadId) {
+      updates.push(Lead.updateMany({ id: existing.leadId }, { $set: { conversationId: '' } }));
+    }
+    await Promise.all(updates);
+    res.json({ deleted: true, conversationId: convId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.patch('/api/conversations/:id', async (req, res) => {
   try {
     const conv = await Conversation.findOneAndUpdate(

@@ -41,7 +41,8 @@ export const DashboardPage = () => {
     knowledgeGaps,
     resolveKnowledgeGapToArticle,
     updateFollowUpStatus,
-    takeOverConversation
+    takeOverConversation,
+    startOrOpenConversation
   } = useCRM();
   const navigate = useNavigate();
 
@@ -478,7 +479,12 @@ export const DashboardPage = () => {
 
               <div className="space-y-3">
                 {leads.map((lead) => {
-                  const conv = conversations.find((c) => c.id === lead.conversationId);
+                  const conv = conversations.find(
+                    (c) =>
+                      (lead.conversationId && c.id === lead.conversationId) ||
+                      c.leadId === lead.id ||
+                      (lead.contactId && c.contactId === lead.contactId)
+                  );
                   return (
                     <div
                       key={lead.id}
@@ -559,13 +565,21 @@ export const DashboardPage = () => {
                         >
                           View Customer Details
                         </Link>
-                        <Link
-                          to={`/inbox?convId=${lead.conversationId}`}
-                          className="font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (conv) {
+                              navigate(`/inbox?convId=${conv.id}`);
+                              return;
+                            }
+                            const reopened = await startOrOpenConversation(lead.contactId, lead.id);
+                            navigate(reopened?.id ? `/inbox?convId=${reopened.id}` : '/inbox');
+                          }}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
                         >
-                          <span>Open WhatsApp Chat</span>
+                          <span>{conv ? 'Open WhatsApp Chat' : 'Reopen WhatsApp Chat'}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   );

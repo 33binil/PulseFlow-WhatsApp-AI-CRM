@@ -272,9 +272,16 @@ export const ContactsListPage = () => {
 export const ContactDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { contacts, leads, conversations, updateContact, addContactNote } = useCRM();
+  const {
+    contacts,
+    leads,
+    conversations,
+    updateContact,
+    addContactNote,
+    startOrOpenConversation
+  } = useCRM();
 
-  const contact = contacts.find((c) => c.id === id) || contacts[0];
+  const contact = contacts.find((c) => c.id === id);
   const contactLeads = leads.filter((l) => l.contactId === contact?.id);
   const contactConvs = conversations.filter((c) => c.contactId === contact?.id);
 
@@ -282,8 +289,35 @@ export const ContactDetailsPage = () => {
   const [noteContent, setNoteContent] = useState('');
 
   if (!contact) {
-    return <div className="p-8 text-xs text-slate-500">Contact not found.</div>;
+    return (
+      <div className="p-8 max-w-lg mx-auto my-12 bg-white border border-slate-200 rounded-xl space-y-3 text-center">
+        <div className="text-sm font-bold text-slate-900">Contact Not Found</div>
+        <p className="text-xs text-slate-500">This contact record may have been deleted.</p>
+        <Link
+          to="/contacts"
+          className="inline-block px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg"
+        >
+          Back to Contacts Directory
+        </Link>
+      </div>
+    );
   }
+
+  const handleOpenContactChat = async () => {
+    if (contactConvs[0]) {
+      navigate(`/inbox?convId=${contactConvs[0].id}`);
+      return;
+    }
+    const reopened = await startOrOpenConversation(
+      contact.id,
+      contactLeads[0]?.id || ''
+    );
+    if (reopened?.id) {
+      navigate(`/inbox?convId=${reopened.id}`);
+    } else {
+      navigate('/inbox');
+    }
+  };
 
   return (
     <div className="p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
@@ -302,15 +336,13 @@ export const ContactDetailsPage = () => {
           </div>
         </div>
 
-        {contactConvs[0] && (
-          <button
-            onClick={() => navigate(`/inbox?convId=${contactConvs[0].id}`)}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>Open WhatsApp Chat</span>
-          </button>
-        )}
+        <button
+          onClick={handleOpenContactChat}
+          className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>{contactConvs[0] ? 'Open WhatsApp Chat' : 'Start / Reopen WhatsApp Chat'}</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -391,26 +423,32 @@ export const ContactDetailsPage = () => {
           {/* Linked Leads & Conversation History */}
           <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
             <h2 className="text-sm font-bold text-slate-900">Linked Leads & WhatsApp History</h2>
-            {contactLeads.map((ld) => (
-              <div
-                key={ld.id}
-                className="p-4 border border-slate-200 rounded-lg bg-slate-50 flex items-center justify-between"
-              >
-                <div className="text-xs">
-                  <div className="font-bold text-slate-900">{ld.interestedService}</div>
-                  <div className="text-slate-600 mt-0.5">
-                    Score: <span className="font-mono font-bold">{ld.leadScore}/100</span> ·{' '}
-                    {ld.leadType} · Stage: {ld.leadStatus} · Budget: {ld.budget}
-                  </div>
-                </div>
-                <Link
-                  to={`/leads/${ld.id}`}
-                  className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg"
-                >
-                  Open Lead
-                </Link>
+            {contactLeads.length === 0 ? (
+              <div className="p-4 border border-dashed border-slate-200 rounded-lg bg-slate-50 text-xs text-slate-500">
+                No active sales leads linked to this contact.
               </div>
-            ))}
+            ) : (
+              contactLeads.map((ld) => (
+                <div
+                  key={ld.id}
+                  className="p-4 border border-slate-200 rounded-lg bg-slate-50 flex items-center justify-between"
+                >
+                  <div className="text-xs">
+                    <div className="font-bold text-slate-900">{ld.interestedService}</div>
+                    <div className="text-slate-600 mt-0.5">
+                      Score: <span className="font-mono font-bold">{ld.leadScore}/100</span> ·{' '}
+                      {ld.leadType} · Stage: {ld.leadStatus} · Budget: {ld.budget}
+                    </div>
+                  </div>
+                  <Link
+                    to={`/leads/${ld.id}`}
+                    className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg"
+                  >
+                    Open Lead
+                  </Link>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

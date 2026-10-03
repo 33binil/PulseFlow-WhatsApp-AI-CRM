@@ -20,12 +20,14 @@ export const LeadsListPage = () => {
   const {
     leads,
     contacts,
+    conversations,
     teamMembers,
     currentUser,
     addContact,
     addLead,
     updateLead,
-    deleteLead
+    deleteLead,
+    startOrOpenConversation
   } = useCRM();
   const navigate = useNavigate();
 
@@ -89,18 +91,20 @@ export const LeadsListPage = () => {
 
   const handleCreateLead = (e) => {
     e.preventDefault();
-    const createdContact = addContact({
-      name: newName,
-      phone: newPhone,
-      email: newEmail || 'prospect@example.com',
-      company: newCompany || 'Direct Inquiry',
-      location: 'Kochi, Kerala',
-      source: 'WhatsApp Inbound',
-      tags: [newType, newService]
-    });
+    const createdContact = addContact(
+      {
+        name: newName,
+        phone: newPhone,
+        email: newEmail || 'prospect@example.com',
+        company: newCompany || 'Direct Inquiry',
+        location: 'Kochi, Kerala',
+        source: 'WhatsApp Inbound',
+        tags: [newType, newService]
+      },
+      { createLead: false, createConversation: false }
+    );
     addLead({
       contactId: createdContact.id,
-      conversationId: 'conv-1',
       leadStatus: 'NEW',
       leadType: newType,
       leadScore: newScore,
@@ -116,6 +120,25 @@ export const LeadsListPage = () => {
     setShowCreateModal(false);
     setNewName('');
     setNewPhone('+91 ');
+  };
+
+  const handleOpenLeadChat = async (lead) => {
+    const existingConv = conversations.find(
+      (c) =>
+        (lead.conversationId && c.id === lead.conversationId) ||
+        c.leadId === lead.id ||
+        (lead.contactId && c.contactId === lead.contactId)
+    );
+    if (existingConv) {
+      navigate(`/inbox?convId=${existingConv.id}`);
+      return;
+    }
+    const reopened = await startOrOpenConversation(lead.contactId, lead.id);
+    if (reopened?.id) {
+      navigate(`/inbox?convId=${reopened.id}`);
+    } else {
+      navigate('/inbox');
+    }
   };
 
   const formatLakhs = (val) => `₹${(val / 100000).toFixed(2)}L`;
@@ -367,7 +390,7 @@ export const LeadsListPage = () => {
                           View Details
                         </Link>
                         <button
-                          onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
+                          onClick={() => handleOpenLeadChat(lead)}
                           className="px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-md hover:bg-slate-100 text-slate-700 cursor-pointer"
                         >
                           Open Chat
@@ -603,17 +626,27 @@ export const LeadDetailsPage = () => {
   const {
     leads,
     contacts,
+    conversations,
     followUps,
     messagesByConv,
+    currentUser,
     updateLead,
+    deleteLead,
     addLeadNote,
-    addFollowUp
+    addFollowUp,
+    startOrOpenConversation
   } = useCRM();
 
-  const lead = leads.find((l) => l.id === id) || leads[0];
+  const lead = leads.find((l) => l.id === id);
   const contact = contacts.find((c) => c.id === lead?.contactId);
+  const linkedConv = conversations.find(
+    (c) =>
+      (lead?.conversationId && c.id === lead.conversationId) ||
+      (lead && c.leadId === lead.id) ||
+      (lead?.contactId && c.contactId === lead.contactId)
+  );
   const leadFollowUps = followUps.filter((f) => f.leadId === lead?.id);
-  const convMessages = lead ? messagesByConv[lead.conversationId] || [] : [];
+  const convMessages = linkedConv ? messagesByConv[linkedConv.id] || [] : [];
 
   const [noteText, setNoteText] = useState('');
   const [reqInput, setReqInput] = useState('');
@@ -622,8 +655,39 @@ export const LeadDetailsPage = () => {
   const [fuNote, setFuNote] = useState('');
 
   if (!lead) {
-    return <div className="p-8 text-xs text-slate-500">Lead record not found.</div>;
+    return (
+      <div className="p-8 max-w-lg mx-auto my-12 bg-white border border-slate-200 rounded-xl space-y-3 text-center">
+        <div className="text-sm font-bold text-slate-900">Lead Record Not Found</div>
+        <p className="text-xs text-slate-500">
+          This sales lead may have been deleted from the pipeline.
+        </p>
+        <Link
+          to="/leads"
+          className="inline-block px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg"
+        >
+          Back to Sales Leads
+        </Link>
+      </div>
+    );
   }
+
+  const handleOpenChat = async () => {
+    if (linkedConv) {
+      navigate(`/inbox?convId=${linkedConv.id}`);
+      return;
+    }
+    const reopened = await startOrOpenConversation(lead.contactId, lead.id);
+    if (reopened?.id) {
+      navigate(`/inbox?convId=${reopened.id}`);
+    } else {
+      navigate('/inbox');
+    }
+  };
+
+  const handleDeleteCurrentLead = () => {
+    deleteLead(lead.id);
+    navigate('/leads');
+  };
 
   const sb = lead.scoreBreakdown;
 
@@ -654,12 +718,22 @@ export const LeadDetailsPage = () => {
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
+            onClick={handleOpenChat}
             className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer"
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Open WhatsApp Chat</span>
+            <span>{linkedConv ? 'Open WhatsApp Chat' : 'Reopen WhatsApp Chat'}</span>
           </button>
+          {currentUser?.role !== 'AGENT' && (
+            <button
+              onClick={handleDeleteCurrentLead}
+              className="px-3.5 py-2 border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+              title="Delete only this sales lead (preserves WhatsApp conversation and contact)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Delete Lead</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -672,7 +746,7 @@ export const LeadDetailsPage = () => {
           <p className="text-sm font-semibold text-white">{lead.recommendedNextAction}</p>
         </div>
         <button
-          onClick={() => navigate(`/inbox?convId=${lead.conversationId}`)}
+          onClick={handleOpenChat}
           className="px-4 py-2 bg-white text-slate-900 text-xs font-bold rounded-lg hover:bg-emerald-50 shrink-0 cursor-pointer"
         >
           Reply on WhatsApp →
@@ -868,29 +942,38 @@ export const LeadDetailsPage = () => {
               <h3 className="text-sm font-bold text-slate-900">
                 Recent WhatsApp Messages ({convMessages.length})
               </h3>
-              <Link
-                to={`/inbox?convId=${lead.conversationId}`}
-                className="text-xs font-semibold text-emerald-700 hover:underline"
+              <button
+                type="button"
+                onClick={handleOpenChat}
+                className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
               >
-                Reply in WhatsApp Inbox →
-              </Link>
+                {linkedConv ? 'Reply in WhatsApp Inbox →' : 'Reopen WhatsApp Chat →'}
+              </button>
             </div>
-            <div className="space-y-2.5 max-h-80 overflow-y-auto">
-              {convMessages.map((m) => (
-                <div
-                  key={m.id}
-                  className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs"
-                >
-                  <div className="flex justify-between text-[11px] text-slate-500 mb-1">
-                    <span className="font-semibold text-slate-800">
-                      {m.senderName} ({m.senderType})
-                    </span>
-                    <span className="font-mono">{m.timestamp}</span>
+            {convMessages.length === 0 ? (
+              <div className="p-4 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 text-center">
+                {linkedConv
+                  ? 'No messages recorded in this WhatsApp thread yet.'
+                  : 'No active WhatsApp chat in Inbox. Click "Reopen WhatsApp Chat" above to start a new thread.'}
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-80 overflow-y-auto">
+                {convMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                  >
+                    <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                      <span className="font-semibold text-slate-800">
+                        {m.senderName} ({m.senderType})
+                      </span>
+                      <span className="font-mono">{m.timestamp}</span>
+                    </div>
+                    <p className="text-slate-700">{m.content}</p>
                   </div>
-                  <p className="text-slate-700">{m.content}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

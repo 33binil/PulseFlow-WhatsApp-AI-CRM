@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MessageSquare, UserCheck, Bot, AlertTriangle } from 'lucide-react';
+import { Search, MessageSquare, UserCheck, Bot, AlertTriangle, Trash2 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
 export const ConversationsPage = () => {
@@ -10,7 +10,8 @@ export const ConversationsPage = () => {
     leads,
     teamMembers,
     takeOverConversation,
-    returnConversationToAI
+    returnConversationToAI,
+    deleteConversation
   } = useCRM();
   const navigate = useNavigate();
 
@@ -21,7 +22,11 @@ export const ConversationsPage = () => {
     return conversations
       .map((conv) => {
         const contact = contacts.find((c) => c.id === conv.contactId);
-        const lead = leads.find((l) => l.id === conv.leadId);
+        const lead = leads.find(
+          (l) =>
+            (conv.leadId && l.id === conv.leadId) ||
+            (conv.contactId && l.contactId === conv.contactId)
+        );
         const agent = teamMembers.find((t) => t.id === conv.assignedAgentId);
         return { conv, contact, lead, agent };
       })
@@ -155,11 +160,18 @@ export const ConversationsPage = () => {
                     ) : (
                       <button
                         onClick={() => returnConversationToAI(conv.id)}
-                        className="px-2.5 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-100 text-emerald-700"
+                        className="px-2.5 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-100 text-emerald-700 cursor-pointer"
                       >
                         Return to AI
                       </button>
                     )}
+                    <button
+                      onClick={() => deleteConversation(conv.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      title="Delete Chat"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 inline" />
+                    </button>
                   </td>
                 </tr>
               ))}

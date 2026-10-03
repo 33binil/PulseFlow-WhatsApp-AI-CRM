@@ -24,7 +24,8 @@ export const AIInsightsPage = () => {
     knowledgeBase,
     knowledgeGaps,
     resolveKnowledgeGapToArticle,
-    strategicFindings
+    strategicFindings,
+    startOrOpenConversation
   } = useCRM();
 
   const navigate = useNavigate();
@@ -172,7 +173,12 @@ export const AIInsightsPage = () => {
         <div className="space-y-4">
           {filteredLeadsWithFindings.map((lead) => {
             const contact = contacts.find((c) => c.id === lead.contactId);
-            const conv = conversations.find((c) => c.id === lead.conversationId);
+            const conv = conversations.find(
+              (c) =>
+                (lead.conversationId && c.id === lead.conversationId) ||
+                c.leadId === lead.id ||
+                (lead.contactId && c.contactId === lead.contactId)
+            );
             return (
               <div
                 key={lead.id}
@@ -206,12 +212,20 @@ export const AIInsightsPage = () => {
                         Chats in {conv?.language || 'English'}
                       </div>
                     </div>
-                    <Link
-                      to={`/inbox?convId=${lead.conversationId}`}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg whitespace-nowrap"
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (conv) {
+                          navigate(`/inbox?convId=${conv.id}`);
+                          return;
+                        }
+                        const reopened = await startOrOpenConversation(lead.contactId, lead.id);
+                        navigate(reopened?.id ? `/inbox?convId=${reopened.id}` : '/inbox');
+                      }}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg whitespace-nowrap cursor-pointer"
                     >
-                      Open WhatsApp Chat
-                    </Link>
+                      {conv ? 'Open WhatsApp Chat' : 'Reopen WhatsApp Chat'}
+                    </button>
                   </div>
                 </div>
 

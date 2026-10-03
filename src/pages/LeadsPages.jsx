@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -30,15 +30,27 @@ export const LeadsListPage = () => {
     startOrOpenConversation
   } = useCRM();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [viewMode, setViewMode] = useState('TABLE');
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState(() => {
+    const paramType = searchParams.get('type');
+    return paramType ? paramType.toUpperCase() : 'ALL';
+  });
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [agentFilter, setAgentFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('score');
   const [page, setPage] = useState(1);
   const pageSize = 6;
+
+  useEffect(() => {
+    const paramType = searchParams.get('type');
+    if (paramType) {
+      setTypeFilter(paramType.toUpperCase());
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState('');

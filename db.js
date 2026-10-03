@@ -107,6 +107,12 @@ const LeadSchema = new mongoose.Schema(
     purchaseIntent: { type: Boolean, default: false },
     lastInteractionAt: { type: String, default: 'Just now' },
     nextFollowUpAt: { type: String, default: '' },
+    previousLeadStatus: { type: String, default: 'NEW' },
+    previousLeadType: { type: String, default: '' },
+    lastHotTransitionAt: { type: Number, default: 0 },
+    hotLeadNotifiedAt: { type: Number, default: 0 },
+    hotLeadAcknowledgedAt: { type: Number, default: 0 },
+    hotLeadAcknowledgedBy: { type: mongoose.Schema.Types.Mixed, default: {} },
     createdAt: { type: String, default: () => new Date().toISOString().slice(0, 10) },
     updatedAt: { type: String, default: () => new Date().toISOString().slice(0, 10) },
     notes: { type: [NoteSubSchema], default: [] }
@@ -568,12 +574,36 @@ export async function purgeLegacyFakeDataAndEnsureDefaults() {
         );
       }
     }
+
+    // Initialize hot lead transition state for any existing leads missing lastHotTransitionAt
+    const allLeads = await Lead.find({});
+    const initMs = Date.now();
+    for (const l of allLeads) {
+      const isHot = l.leadType === 'HOT' || Number(l.leadScore) >= 81;
+      if (l.lastHotTransitionAt === undefined || (isHot && !l.lastHotTransitionAt && !l.hotLeadAcknowledgedAt)) {
+        await Lead.findOneAndUpdate(
+          { id: l.id },
+          {
+            $set: {
+              leadType: isHot ? 'HOT' : l.leadType || 'WARM',
+              previousLeadStatus: l.previousLeadStatus || l.leadStatus || 'NEW',
+              previousLeadType: l.previousLeadType || (isHot ? 'WARM' : l.leadType || 'WARM'),
+              lastHotTransitionAt: isHot ? initMs : 0,
+              hotLeadNotifiedAt: isHot ? initMs : 0,
+              hotLeadAcknowledgedAt: l.hotLeadAcknowledgedAt || 0,
+              hotLeadAcknowledgedBy: l.hotLeadAcknowledgedBy || {}
+            }
+          }
+        );
+      }
+    }
   } catch (err) {
     console.warn('[db] ensure defaults notice:', err.message);
   }
 }
 
 let isConnected = false;
+let defaultsEnsured = false;
 
 export async function connectDB() {
   if (isConnected || mongoose.connection.readyState === 1) {
@@ -582,7 +612,11 @@ export async function connectDB() {
 
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.log('[db] MONGODB_URI not configured — in-memory fallback active.');
+    if (!defaultsEnsured) {
+      defaultsEnsured = true;
+      console.log('[db] MONGODB_URI not configured — in-memory fallback active.');
+      await purgeLegacyFakeDataAndEnsureDefaults();
+    }
     return null;
   }
 
@@ -591,12 +625,17 @@ export async function connectDB() {
       serverSelectionTimeoutMS: 3000
     });
     isConnected = true;
+    defaultsEnsured = true;
     console.log(`[db] MongoDB connected successfully to database: ${mongoose.connection.name}`);
     await purgeLegacyFakeDataAndEnsureDefaults();
     return conn;
   } catch (error) {
     isConnected = false;
-    console.warn('[db] MongoDB unavailable, using in-memory store:', error.message);
+    if (!defaultsEnsured) {
+      defaultsEnsured = true;
+      console.warn('[db] MongoDB unavailable, using in-memory store:', error.message);
+      await purgeLegacyFakeDataAndEnsureDefaults();
+    }
     return null;
   }
 }

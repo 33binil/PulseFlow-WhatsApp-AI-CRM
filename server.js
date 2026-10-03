@@ -961,13 +961,55 @@ async function handleIncomingCustomerMessage({
 
   // Update Lead in MongoDB
   if (lead) {
+    const prevScore = Number(lead.leadScore ?? 50);
+    const prevType =
+      lead.leadType || (prevScore >= 81 ? 'HOT' : prevScore >= 31 ? 'WARM' : 'COLD');
+    const wasHot = prevType === 'HOT' || prevScore >= 81;
+
+    const nextScore = Number(aiStructured.leadScore ?? prevScore);
+    const nextType =
+      nextScore >= 81
+        ? 'HOT'
+        : aiStructured.leadType && aiStructured.leadType !== 'HOT'
+        ? aiStructured.leadType
+        : nextScore >= 31
+        ? 'WARM'
+        : 'COLD';
+    const isNowHot = nextScore >= 81 || nextType === 'HOT';
+
     const numericBudget =
       parseInt(String(aiStructured.budget).replace(/[^0-9]/g, ''), 10) ||
       lead.estimatedValueInr ||
       0;
 
-    lead.leadScore = aiStructured.leadScore;
-    lead.leadType = aiStructured.leadType;
+    if (!wasHot && isNowHot) {
+      const nowMs = Date.now();
+      lead.previousLeadStatus = lead.leadStatus || 'NEW';
+      lead.previousLeadType = prevType;
+      lead.lastHotTransitionAt = nowMs;
+      lead.hotLeadNotifiedAt = nowMs;
+      lead.hotLeadAcknowledgedAt = 0;
+      lead.hotLeadAcknowledgedBy = {};
+
+      await Notification.create({
+        id: `notif-hot-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+        type: 'HOT_LEAD',
+        title: '🔥 Hot Lead Alert',
+        message: `${contact?.name || 'Customer'} reached ${nextScore}/100 (HOT) for ${
+          aiStructured.service || lead.interestedService || 'Inquiry'
+        }.`,
+        createdAt: 'Just now',
+        isRead: false,
+        linkTo: `/leads/${lead.id}`
+      });
+    } else if (wasHot && !isNowHot) {
+      lead.previousLeadStatus = lead.leadStatus || 'NEW';
+      lead.previousLeadType = 'HOT';
+      lead.lastHotTransitionAt = 0;
+    }
+
+    lead.leadScore = nextScore;
+    lead.leadType = nextType;
     lead.interestedService = aiStructured.service || lead.interestedService;
     lead.budget = aiStructured.budget || lead.budget;
     if (numericBudget > 0) lead.estimatedValueInr = numericBudget;
@@ -1674,13 +1716,128 @@ app.post('/api/contacts/:id/notes', async (req, res) => {
   }
 });
 
-// 4. Leads CRUD
+// 4. Leads CRUD & Real-Time Hot Lead Alerts
+app.get('/api/leads/hot-alerts', async (req, res) => {
+  try {
+    await connectDB();
+    const userId = String(req.query.userId || 'admin-1');
+    const [leadDocs, contactDocs, convDocs] = await Promise.all([
+      Lead.find({}).sort({ leadScore: -1, _id: -1 }),
+      Contact.find({}),
+      Conversation.find({})
+    ]);
+
+    const leads = cleanList(leadDocs);
+    const contacts = cleanList(contactDocs);
+    const conversations = cleanList(convDocs);
+
+    const unacknowledgedHotLeads = leads.filter((lead) => {
+      const isHot = lead.leadType === 'HOT' || Number(lead.leadScore) >= 81;
+      if (!isHot) return false;
+      const transitionAt = Number(lead.lastHotTransitionAt || 0);
+      if (transitionAt <= 0) return false;
+      const userAckAt = Number(lead.hotLeadAcknowledgedBy?.[userId] || 0);
+      const globalAckAt = Number(lead.hotLeadAcknowledgedAt || 0);
+      const ackAt = Math.max(userAckAt, globalAckAt);
+      return ackAt < transitionAt;
+    });
+
+    const alerts = unacknowledgedHotLeads.map((lead) => {
+      const contact = contacts.find((c) => c.id === lead.contactId);
+      const conv = conversations.find(
+        (c) =>
+          (lead.conversationId && c.id === lead.conversationId) ||
+          c.leadId === lead.id ||
+          (lead.contactId && c.contactId === lead.contactId)
+      );
+      return {
+        leadId: lead.id,
+        contactId: lead.contactId,
+        conversationId: conv?.id || lead.conversationId || '',
+        customerName: contact?.name || 'WhatsApp Customer',
+        customerPhone: contact?.phone || '',
+        company: contact?.company || '',
+        interestedService: lead.interestedService || 'General Inquiry',
+        leadScore: Number(lead.leadScore ?? 85),
+        leadType: 'HOT',
+        leadStatus: lead.leadStatus || 'NEW',
+        budget: lead.budget || 'Not disclosed',
+        recommendedNextAction:
+          lead.recommendedNextAction || 'Handover this lead to a human sales representative.',
+        lastHotTransitionAt: Number(lead.lastHotTransitionAt || 0),
+        hotLeadNotifiedAt: Number(lead.hotLeadNotifiedAt || lead.lastHotTransitionAt || 0)
+      };
+    });
+
+    res.json({
+      count: alerts.length,
+      alerts
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/leads/hot-alerts/acknowledge', async (req, res) => {
+  try {
+    await connectDB();
+    const userId = String(req.body?.userId || 'admin-1');
+    const leadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
+    const acknowledgeAll = Boolean(req.body?.acknowledgeAll);
+    const nowMs = Date.now();
+
+    const allLeads = await Lead.find({});
+    const targetLeads = allLeads.filter((l) => {
+      if (acknowledgeAll) {
+        const isHot = l.leadType === 'HOT' || Number(l.leadScore) >= 81;
+        return isHot && Number(l.lastHotTransitionAt || 0) > 0;
+      }
+      return leadIds.includes(l.id);
+    });
+
+    const acknowledgedIds = [];
+    for (const l of targetLeads) {
+      const nextAckBy = {
+        ...(l.hotLeadAcknowledgedBy || {}),
+        [userId]: nowMs
+      };
+      // IMPORTANT: Only mark hot lead alert as acknowledged.
+      // Do NOT change leadStatus, leadScore, leadType, conv.aiEnabled, or conv.humanTakeoverActive.
+      await Lead.findOneAndUpdate(
+        { id: l.id },
+        {
+          $set: {
+            hotLeadAcknowledgedAt: nowMs,
+            hotLeadAcknowledgedBy: nextAckBy
+          }
+        }
+      );
+      acknowledgedIds.push(l.id);
+    }
+
+    res.json({
+      ok: true,
+      acknowledgedLeadIds: acknowledgedIds,
+      acknowledgedAt: nowMs
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/leads', async (req, res) => {
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const leadId = req.body.id || `ld-${Date.now()}`;
-    const score = Number(req.body.leadScore ?? 75);
+    const rawScore = Number(req.body.leadScore ?? 75);
+    const resolvedType =
+      rawScore >= 81
+        ? 'HOT'
+        : req.body.leadType || (rawScore >= 31 ? 'WARM' : 'COLD');
+    const isNowHot = resolvedType === 'HOT' || rawScore >= 81;
+    const score = isNowHot ? Math.max(rawScore, 81) : rawScore;
+    const nowMs = Date.now();
     const numericVal =
       req.body.estimatedValueInr ??
       (parseInt(String(req.body.budget || '').replace(/[^0-9]/g, ''), 10) || 0);
@@ -1716,7 +1873,7 @@ app.post('/api/leads', async (req, res) => {
       contactId: req.body.contactId,
       conversationId: conv ? conv.id : '',
       leadStatus: req.body.leadStatus || 'NEW',
-      leadType: req.body.leadType || (score >= 81 ? 'HOT' : score >= 31 ? 'WARM' : 'COLD'),
+      leadType: isNowHot ? 'HOT' : resolvedType,
       leadScore: score,
       scoreBreakdown: req.body.scoreBreakdown || {
         budgetReadiness: Math.min(25, Math.round(score * 0.25)),
@@ -1738,7 +1895,7 @@ app.post('/api/leads', async (req, res) => {
         : [],
       recommendedNextAction:
         req.body.recommendedNextAction ||
-        'Send service details on WhatsApp and schedule discovery call.',
+        'Handover this lead to a human sales representative.',
       customerSentiment: req.body.customerSentiment || 'Positive & High Intent',
       source: req.body.source || 'WhatsApp Inbound',
       assignedAgentId: req.body.assignedAgentId || 'admin-1',
@@ -1749,10 +1906,29 @@ app.post('/api/leads', async (req, res) => {
         }.`,
       purchaseIntent: Boolean(req.body.purchaseIntent ?? score >= 75),
       lastInteractionAt: 'Just now',
+      previousLeadStatus: 'NEW',
+      previousLeadType: 'NEW',
+      lastHotTransitionAt: isNowHot ? nowMs : 0,
+      hotLeadNotifiedAt: isNowHot ? nowMs : 0,
+      hotLeadAcknowledgedAt: 0,
+      hotLeadAcknowledgedBy: {},
       createdAt: todayStr,
       updatedAt: todayStr,
       notes: []
     });
+
+    if (isNowHot) {
+      const contact = await Contact.findOne({ id: req.body.contactId });
+      await Notification.create({
+        id: `notif-hot-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+        type: 'HOT_LEAD',
+        title: '🔥 Hot Lead Alert',
+        message: `${contact?.name || 'Customer'} (${score}/100 — HOT) is ready for sales follow-up.`,
+        createdAt: 'Just now',
+        isRead: false,
+        linkTo: `/leads/${createdLead.id}`
+      });
+    }
 
     res.status(201).json({
       lead: cleanDoc(createdLead),
@@ -1765,10 +1941,74 @@ app.post('/api/leads', async (req, res) => {
 
 app.patch('/api/leads/:id', async (req, res) => {
   try {
+    const existingLead = await Lead.findOne({ id: req.params.id });
+    if (!existingLead) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    const prevScore = Number(existingLead.leadScore ?? 50);
+    const prevType =
+      existingLead.leadType || (prevScore >= 81 ? 'HOT' : prevScore >= 31 ? 'WARM' : 'COLD');
+    const wasHot = prevType === 'HOT' || prevScore >= 81;
+
+    const hasScoreUpdate = req.body.leadScore !== undefined;
+    const hasTypeUpdate = req.body.leadType !== undefined;
+
+    let nextScore = hasScoreUpdate ? Number(req.body.leadScore) : prevScore;
+    let nextType = prevType;
+
+    if (hasScoreUpdate) {
+      if (nextScore >= 81) {
+        nextType = 'HOT';
+      } else if (hasTypeUpdate && req.body.leadType !== 'HOT') {
+        nextType = req.body.leadType;
+      } else {
+        nextType = nextScore >= 31 ? 'WARM' : 'COLD';
+      }
+    } else if (hasTypeUpdate) {
+      nextType = req.body.leadType;
+      if (nextType === 'HOT' && nextScore < 81) {
+        nextScore = 85;
+      } else if (nextType !== 'HOT' && nextScore >= 81) {
+        nextScore = nextType === 'WARM' ? 75 : 25;
+      }
+    }
+
+    const isNowHot = nextScore >= 81 || nextType === 'HOT';
     const patch = {
       ...req.body,
+      leadScore: nextScore,
+      leadType: isNowHot ? 'HOT' : nextType,
       updatedAt: new Date().toISOString().slice(0, 10)
     };
+
+    if (!wasHot && isNowHot) {
+      const nowMs = Date.now();
+      patch.previousLeadStatus = existingLead.leadStatus || 'NEW';
+      patch.previousLeadType = prevType;
+      patch.lastHotTransitionAt = nowMs;
+      patch.hotLeadNotifiedAt = nowMs;
+      patch.hotLeadAcknowledgedAt = 0;
+      patch.hotLeadAcknowledgedBy = {};
+
+      const contact = await Contact.findOne({ id: existingLead.contactId });
+      await Notification.create({
+        id: `notif-hot-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+        type: 'HOT_LEAD',
+        title: '🔥 Hot Lead Alert',
+        message: `${contact?.name || 'Customer'} reached ${nextScore}/100 (HOT) for ${
+          patch.interestedService || existingLead.interestedService || 'Inquiry'
+        }.`,
+        createdAt: 'Just now',
+        isRead: false,
+        linkTo: `/leads/${existingLead.id}`
+      });
+    } else if (wasHot && !isNowHot) {
+      patch.previousLeadStatus = existingLead.leadStatus || 'NEW';
+      patch.previousLeadType = 'HOT';
+      patch.lastHotTransitionAt = 0;
+    }
+
     const updated = await Lead.findOneAndUpdate(
       { id: req.params.id },
       { $set: patch },

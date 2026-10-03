@@ -27,7 +27,9 @@ import {
   Zap,
   HelpCircle,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  UserCheck,
+  Flame
 } from 'lucide-react';
 import { useCRM } from '../context/CRMContext';
 
@@ -44,6 +46,12 @@ export const CRMWorkspaceLayout = ({ children }) => {
     notifications,
     markNotificationRead,
     markAllNotificationsRead,
+    hotLeadAlerts,
+    hotLeadOverlayOpen,
+    setHotLeadOverlayOpen,
+    acknowledgeHotLeads,
+    takeOverConversation,
+    startOrOpenConversation,
     toasts,
     dismissToast
   } = useCRM();
@@ -296,6 +304,20 @@ export const CRMWorkspaceLayout = ({ children }) => {
             <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
             <span className="hidden sm:inline">How It Works</span>
           </button>
+
+          {/* Hot Lead Notification Badge in Top Navigation */}
+          {hotLeadAlerts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setHotLeadOverlayOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap animate-pulse"
+              title="Unacknowledged Hot Lead Alert — Click to open"
+            >
+              <span>
+                🔥 {hotLeadAlerts.length} Hot {hotLeadAlerts.length === 1 ? 'Lead' : 'Leads'}
+              </span>
+            </button>
+          )}
 
           {/* Notification Dropdown Trigger */}
           <div className="relative">
@@ -710,6 +732,253 @@ export const CRMWorkspaceLayout = ({ children }) => {
               </Link>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Global Real-Time Hot Lead Notification & Handover Overlay */}
+      {hotLeadOverlayOpen && hotLeadAlerts.length > 0 && (
+        <div
+          role="dialog"
+          aria-labelledby="hot-lead-alert-title"
+          className="fixed top-16 right-4 z-50 w-[calc(100vw-2rem)] max-w-md bg-white border border-slate-200 border-t-4 border-t-rose-600 rounded-2xl shadow-2xl p-5 space-y-4 transition-all"
+        >
+          {hotLeadAlerts.length === 1 ? (
+            (() => {
+              const singleAlert = hotLeadAlerts[0];
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <div
+                        id="hot-lead-alert-title"
+                        className="text-xs font-extrabold tracking-wide text-rose-700 uppercase flex items-center gap-1.5"
+                      >
+                        <span>🔥 HOT LEAD ALERT</span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-900 mt-1">
+                        You have 1 new Hot Lead that needs your attention.
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        New high-intent customer detected.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeHotLeads([singleAlert.leadId], 'DISMISS')}
+                      className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                      title="Dismiss and acknowledge"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[11px] text-slate-500 block">Customer</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {singleAlert.customerName}
+                        </span>
+                        {singleAlert.company ? (
+                          <span className="text-xs text-slate-500 ml-1.5">
+                            · {singleAlert.company}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="px-2.5 py-1 rounded-md bg-rose-100 text-rose-800 font-mono font-bold text-xs tabular-nums">
+                        {singleAlert.leadScore}/100 — HOT
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-200/70">
+                      <div>
+                        <span className="text-[11px] text-slate-500 block">Service</span>
+                        <span className="font-semibold text-slate-900">
+                          {singleAlert.interestedService}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-500 block">Budget</span>
+                        <span className="font-mono font-bold text-emerald-700 tabular-nums">
+                          {singleAlert.budget}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-200/70 space-y-1">
+                      <div className="text-[11px] text-slate-500">Recommended action</div>
+                      <div className="font-semibold text-slate-800">
+                        Handover this lead to a human sales representative.
+                      </div>
+                      <div className="text-[11px] italic text-emerald-800">
+                        "This lead appears ready for sales follow-up."
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          acknowledgeHotLeads([singleAlert.leadId], 'VIEW_LEAD');
+                          navigate(`/leads/${singleAlert.leadId}`);
+                        }}
+                        className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                      >
+                        View Lead
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          acknowledgeHotLeads([singleAlert.leadId], 'TAKE_OVER_CHAT');
+                          let convId = singleAlert.conversationId;
+                          if (!convId && singleAlert.contactId) {
+                            const opened = await startOrOpenConversation(
+                              singleAlert.contactId,
+                              singleAlert.leadId
+                            );
+                            convId = opened?.id || '';
+                          }
+                          if (convId) {
+                            takeOverConversation(convId);
+                            navigate(`/inbox?convId=${convId}`);
+                          } else {
+                            navigate('/inbox');
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Take Over Chat</span>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeHotLeads([singleAlert.leadId], 'DISMISS')}
+                      className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </>
+              );
+            })()
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <div
+                    id="hot-lead-alert-title"
+                    className="text-xs font-extrabold tracking-wide text-rose-700 uppercase flex items-center gap-1.5"
+                  >
+                    <span>🔥 HOT LEADS NEED ATTENTION</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 mt-1">
+                    You have {hotLeadAlerts.length} new Hot Leads that need your attention.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    acknowledgeHotLeads(
+                      hotLeadAlerts.map((a) => a.leadId),
+                      'DISMISS'
+                    )
+                  }
+                  className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                  title="Dismiss all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 max-h-60 overflow-y-auto divide-y divide-slate-200/70 text-xs">
+                {hotLeadAlerts.map((alert, idx) => (
+                  <div
+                    key={alert.leadId}
+                    className="py-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0 truncate">
+                      <span className="font-mono text-slate-500 mr-1">{idx + 1}.</span>
+                      <span className="font-bold text-slate-900">{alert.customerName}</span>
+                      <span className="text-slate-400 mx-1">—</span>
+                      <span className="font-mono font-bold text-rose-700 tabular-nums">
+                        {alert.leadScore}/100
+                      </span>
+                      <span className="text-slate-400 mx-1">—</span>
+                      <span className="font-mono text-emerald-700 font-semibold tabular-nums">
+                        {alert.budget}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          acknowledgeHotLeads([alert.leadId], 'VIEW_LEAD');
+                          navigate(`/leads/${alert.leadId}`);
+                        }}
+                        className="px-2 py-1 text-[11px] font-semibold bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded cursor-pointer"
+                      >
+                        View Lead
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          acknowledgeHotLeads([alert.leadId], 'TAKE_OVER_CHAT');
+                          let convId = alert.conversationId;
+                          if (!convId && alert.contactId) {
+                            const opened = await startOrOpenConversation(
+                              alert.contactId,
+                              alert.leadId
+                            );
+                            convId = opened?.id || '';
+                          }
+                          if (convId) {
+                            takeOverConversation(convId);
+                            navigate(`/inbox?convId=${convId}`);
+                          } else {
+                            navigate('/inbox');
+                          }
+                        }}
+                        className="px-2 py-1 text-[11px] font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded cursor-pointer"
+                      >
+                        Take Over Chat
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    acknowledgeHotLeads(
+                      hotLeadAlerts.map((a) => a.leadId),
+                      'VIEW_HOT_LEADS'
+                    );
+                    navigate('/leads?type=HOT');
+                  }}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  View Hot Leads
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    acknowledgeHotLeads(
+                      hotLeadAlerts.map((a) => a.leadId),
+                      'DISMISS'
+                    )
+                  }
+                  className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

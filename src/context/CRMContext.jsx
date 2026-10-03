@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import {
   INITIAL_TEAM_MEMBERS,
   INITIAL_AI_SETTINGS,
@@ -27,6 +27,9 @@ export const CRMProvider = ({ children }) => {
   const [companySettings, setCompanySettings] = useState(INITIAL_COMPANY_SETTINGS);
   const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [hotLeadAlerts, setHotLeadAlerts] = useState([]);
+  const [hotLeadOverlayOpen, setHotLeadOverlayOpen] = useState(false);
+  const seenHotTransitionsRef = useRef({});
 
   const pushToast = useCallback((title, description, variant = 'default') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -85,7 +88,9 @@ export const CRMProvider = ({ children }) => {
                 p.leadStatus === n.leadStatus &&
                 p.leadType === n.leadType &&
                 p.conversationId === n.conversationId &&
-                p.budget === n.budget
+                p.budget === n.budget &&
+                p.lastHotTransitionAt === n.lastHotTransitionAt &&
+                p.hotLeadAcknowledgedAt === n.hotLeadAcknowledgedAt
               );
             })
           ) {
@@ -152,6 +157,121 @@ export const CRMProvider = ({ children }) => {
     }
   }, []);
 
+  const fetchHotLeadAlerts = useCallback(
+    async (explicitUserId) => {
+      try {
+        const uid = explicitUserId || currentUser?.id || 'admin-1';
+        const res = await fetch(`/api/leads/hot-alerts?userId=${encodeURIComponent(uid)}`, {
+          headers: { Accept: 'application/json' }
+        });
+        if (!res.ok) return;
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
+        const data = await res.json();
+        const incomingAlerts = Array.isArray(data.alerts) ? data.alerts : [];
+
+        let hasNewUnseenTransition = false;
+        for (const alert of incomingAlerts) {
+          const prevSeenTs = seenHotTransitionsRef.current[alert.leadId];
+          if (prevSeenTs !== alert.lastHotTransitionAt) {
+            hasNewUnseenTransition = true;
+            seenHotTransitionsRef.current[alert.leadId] = alert.lastHotTransitionAt;
+          }
+        }
+
+        // Clean up seen ref for leads no longer in incomingAlerts
+        const activeIds = new Set(incomingAlerts.map((a) => a.leadId));
+        for (const existingId of Object.keys(seenHotTransitionsRef.current)) {
+          if (!activeIds.has(existingId)) {
+            delete seenHotTransitionsRef.current[existingId];
+          }
+        }
+
+        setHotLeadAlerts((prev) => {
+          if (
+            prev.length === incomingAlerts.length &&
+            prev.every((p, idx) => {
+              const n = incomingAlerts[idx];
+              return (
+                n &&
+                p.leadId === n.leadId &&
+                p.leadScore === n.leadScore &&
+                p.budget === n.budget &&
+                p.lastHotTransitionAt === n.lastHotTransitionAt
+              );
+            })
+          ) {
+            return prev;
+          }
+          return incomingAlerts;
+        });
+
+        if (incomingAlerts.length === 0) {
+          setHotLeadOverlayOpen(false);
+        } else if (hasNewUnseenTransition) {
+          setHotLeadOverlayOpen(true);
+        }
+      } catch (_err) {
+        // Ignore transient network errors during server restarts
+      }
+    },
+    [currentUser?.id]
+  );
+
+  const acknowledgeHotLeads = useCallback(
+    async (leadIds = [], action = 'DISMISS') => {
+      const uid = currentUser?.id || 'admin-1';
+      const targetIds =
+        Array.isArray(leadIds) && leadIds.length > 0
+          ? leadIds
+          : hotLeadAlerts.map((a) => a.leadId);
+
+      if (targetIds.length === 0) {
+        setHotLeadOverlayOpen(false);
+        return;
+      }
+
+      const nowMs = Date.now();
+      setHotLeadAlerts((prev) => {
+        const remaining = prev.filter((a) => !targetIds.includes(a.leadId));
+        if (remaining.length === 0) {
+          setHotLeadOverlayOpen(false);
+        }
+        return remaining;
+      });
+
+      setLeads((prev) =>
+        prev.map((l) =>
+          targetIds.includes(l.id)
+            ? {
+                ...l,
+                hotLeadAcknowledgedAt: nowMs,
+                hotLeadAcknowledgedBy: {
+                  ...(l.hotLeadAcknowledgedBy || {}),
+                  [uid]: nowMs
+                }
+              }
+            : l
+        )
+      );
+
+      try {
+        await fetch('/api/leads/hot-alerts/acknowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leadIds: targetIds,
+            userId: uid,
+            action
+          })
+        });
+      } catch (err) {
+        console.error('Failed to acknowledge hot leads:', err);
+      }
+    },
+    [currentUser?.id, hotLeadAlerts]
+  );
+
   useEffect(() => {
     fetchCRMData(false);
     // Poll every 6 seconds so incoming real Meta WhatsApp webhook messages appear live
@@ -160,6 +280,15 @@ export const CRMProvider = ({ children }) => {
     }, 6000);
     return () => clearInterval(interval);
   }, [fetchCRMData]);
+
+  useEffect(() => {
+    fetchHotLeadAlerts();
+    // Lightweight polling every 12 seconds (within 10-15s window) for newly HOT / unacknowledged leads
+    const hotInterval = setInterval(() => {
+      fetchHotLeadAlerts();
+    }, 12000);
+    return () => clearInterval(hotInterval);
+  }, [fetchHotLeadAlerts]);
 
   const loginAsRole = (role, email) => {
     const matched =
@@ -368,6 +497,7 @@ export const CRMProvider = ({ children }) => {
             [data.conversation.id]: prev[data.conversation.id] || []
           }));
         }
+        fetchHotLeadAlerts();
       })
       .catch((err) => console.error('Failed to save lead:', err));
 
@@ -391,12 +521,25 @@ export const CRMProvider = ({ children }) => {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
-    }).catch((err) => console.error('Failed to update lead:', err));
+    })
+      .then((r) => r.json())
+      .then((updatedLead) => {
+        if (updatedLead?.id) {
+          setLeads((prev) => prev.map((l) => (l.id === id ? updatedLead : l)));
+        }
+        fetchHotLeadAlerts();
+      })
+      .catch((err) => console.error('Failed to update lead:', err));
     pushToast('Lead Updated', 'Pipeline state updated in database.', 'success');
   };
 
   const deleteLead = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
+    setHotLeadAlerts((prev) => {
+      const next = prev.filter((a) => a.leadId !== id);
+      if (next.length === 0) setHotLeadOverlayOpen(false);
+      return next;
+    });
     setFollowUps((prev) => prev.filter((f) => f.leadId !== id));
     // Unlink leadId on any related WhatsApp conversation while preserving the conversation and contact
     setConversations((prev) =>
@@ -712,6 +855,7 @@ export const CRMProvider = ({ children }) => {
       if (data.lead) {
         setLeads((prev) => prev.map((l) => (l.id === data.lead.id ? data.lead : l)));
       }
+      fetchHotLeadAlerts();
 
       if (data.aiMsg && data.aiStructured?.needsHuman) {
         pushToast(
@@ -934,6 +1078,11 @@ export const CRMProvider = ({ children }) => {
         notifications,
         markNotificationRead,
         markAllNotificationsRead,
+        hotLeadAlerts,
+        hotLeadOverlayOpen,
+        setHotLeadOverlayOpen,
+        fetchHotLeadAlerts,
+        acknowledgeHotLeads,
         toasts,
         pushToast,
         dismissToast

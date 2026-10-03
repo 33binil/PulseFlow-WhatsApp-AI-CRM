@@ -76,9 +76,21 @@ function verifySignature(req) {
 
 // Helper to send outgoing WhatsApp messages via Meta Cloud API
 async function sendWhatsAppCloudMessage(toPhone, textBody) {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const version = process.env.WHATSAPP_API_VERSION || 'v21.0';
+  const rawToken = process.env.WHATSAPP_ACCESS_TOKEN || '';
+  const token = rawToken.trim().replace(/['"]/g, '');
+  const cleanToken = token.startsWith('Bearer ') ? token.slice(7).trim() : token;
+
+  const phoneId = (
+    process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_PHONE_NUMBER_ID !== '109283746512345'
+      ? process.env.WHATSAPP_PHONE_NUMBER_ID
+      : '1384094818114996'
+  ).trim().replace(/['"]/g, '');
+
+  let version = String(process.env.WHATSAPP_API_VERSION || 'v21.0')
+    .trim()
+    .replace(/['"]/g, '')
+    .replace(/^\/+|\/+$/g, '');
+  if (!version.startsWith('v')) version = `v${version}`;
 
   const cleanPhone = String(toPhone || '').replace(/[^0-9]/g, '');
   console.log(
@@ -87,15 +99,21 @@ async function sendWhatsAppCloudMessage(toPhone, textBody) {
       to: cleanPhone || 'empty',
       phoneNumberId: phoneId || 'missing',
       apiVersion: version,
-      tokenConfigured: Boolean(token),
+      tokenConfigured: Boolean(cleanToken),
+      tokenLength: cleanToken.length,
       textLength: String(textBody || '').length
     })
   );
 
-  if (!token || !phoneId || !toPhone) {
+  if (!cleanToken || !phoneId || !toPhone) {
     console.warn(
       '[whatsapp-api] outgoing WhatsApp send failed',
-      JSON.stringify({ reason: 'missing-whatsapp-config', to: cleanPhone })
+      JSON.stringify({
+        reason: 'missing-whatsapp-config',
+        to: cleanPhone,
+        hasToken: Boolean(cleanToken),
+        hasPhoneId: Boolean(phoneId)
+      })
     );
     return { sent: false, reason: 'missing-whatsapp-config' };
   }
@@ -114,7 +132,7 @@ async function sendWhatsAppCloudMessage(toPhone, textBody) {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cleanToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -129,40 +147,166 @@ async function sendWhatsAppCloudMessage(toPhone, textBody) {
     const data = await response.json();
     const durationMs = Date.now() - t0;
     if (!response.ok) {
+      const errCode = data?.error?.code;
+      const errSubcode = data?.error?.error_subcode;
+      const errType = data?.error?.type;
+      const errMsg = data?.error?.message;
+      const fbtraceId = data?.error?.fbtrace_id;
+
+      let diagnosticHint = '';
+      if (errCode === 131005) {
+        diagnosticHint =
+          `Error 131005 (Access denied): The access token lacks permission for WhatsApp Phone Number ID (${phoneId}). In Meta Business Manager, ensure the System User has "Full Control" asset permission on the WABA (${process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '1409996531275243'}), that the token has "whatsapp_business_messaging" scope, and that the phone number belongs to the same Meta App / WABA.`;
+      } else if (errCode === 190) {
+        diagnosticHint =
+          'Error 190 (Invalid/Expired Access Token): The token is expired, revoked, or malformed. Configure a valid permanent System User token in Meta Business Manager.';
+      } else if (errCode === 131030) {
+        diagnosticHint =
+          'Error 131030 (Recipient not in allowlist): When using a Meta sandbox test number, recipient numbers must be added to the allowed phone numbers list in WhatsApp API Setup.';
+      }
+
       console.warn(
         '[whatsapp-api] outgoing WhatsApp send failed',
         JSON.stringify({
           to: cleanPhone,
+          phoneNumberId: phoneId,
+          apiVersion: version,
+          tokenConfigured: Boolean(cleanToken),
+          tokenLength: cleanToken.length,
           statusCode: response.status,
-          errorCode: data?.error?.code,
-          errorSubcode: data?.error?.error_subcode,
-          error: data?.error?.message || `HTTP ${response.status}`,
+          errorCode: errCode,
+          errorSubcode: errSubcode,
+          errorType: errType,
+          errorMessage: errMsg || `HTTP ${response.status}`,
+          fbtraceId,
+          diagnosticHint: diagnosticHint || undefined,
           durationMs
         })
       );
-      return { sent: false, error: data?.error?.message, statusCode: response.status };
+      return {
+        sent: false,
+        error: errMsg || `HTTP ${response.status}`,
+        statusCode: response.status,
+        errorCode: errCode,
+        errorSubcode: errSubcode,
+        errorType: errType,
+        diagnosticHint: diagnosticHint || undefined
+      };
     }
+
     const wamid = data?.messages?.[0]?.id || `wamid.out.${Date.now()}`;
     console.log(
       '[whatsapp-api] outgoing WhatsApp send completed',
       JSON.stringify({
         to: cleanPhone,
+        phoneNumberId: phoneId,
+        apiVersion: version,
         whatsappMessageId: wamid,
         statusCode: response.status,
         durationMs
       })
     );
-    return { sent: true, whatsappMessageId: wamid };
+    return { sent: true, whatsappMessageId: wamid, statusCode: response.status };
   } catch (err) {
     console.warn(
       '[whatsapp-api] outgoing WhatsApp send failed',
       JSON.stringify({
         to: cleanPhone,
+        phoneNumberId: phoneId,
+        apiVersion: version,
+        tokenConfigured: Boolean(cleanToken),
         error: err.message,
         durationMs: Date.now() - t0
       })
     );
     return { sent: false, error: err.message };
+  }
+}
+
+// Safe startup validation to diagnose WhatsApp credentials without leaking tokens
+async function validateWhatsAppCloudApiOnStartup() {
+  const rawToken = process.env.WHATSAPP_ACCESS_TOKEN || '';
+  const token = rawToken.trim().replace(/['"]/g, '');
+  const cleanToken = token.startsWith('Bearer ') ? token.slice(7).trim() : token;
+
+  const phoneId = (
+    process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_PHONE_NUMBER_ID !== '109283746512345'
+      ? process.env.WHATSAPP_PHONE_NUMBER_ID
+      : '1384094818114996'
+  ).trim().replace(/['"]/g, '');
+
+  let version = String(process.env.WHATSAPP_API_VERSION || 'v21.0')
+    .trim()
+    .replace(/['"]/g, '')
+    .replace(/^\/+|\/+$/g, '');
+  if (!version.startsWith('v')) version = `v${version}`;
+
+  const wabaId = (
+    process.env.WHATSAPP_BUSINESS_ACCOUNT_ID && process.env.WHATSAPP_BUSINESS_ACCOUNT_ID !== '987654321098765'
+      ? process.env.WHATSAPP_BUSINESS_ACCOUNT_ID
+      : '1409996531275243'
+  ).trim().replace(/['"]/g, '');
+
+  console.log(
+    '[whatsapp-startup-check] checking WhatsApp Cloud API credentials...',
+    JSON.stringify({
+      phoneNumberId: phoneId,
+      wabaId,
+      apiVersion: version,
+      tokenConfigured: Boolean(cleanToken),
+      tokenLength: cleanToken ? cleanToken.length : 0
+    })
+  );
+
+  if (!cleanToken || cleanToken.includes('replace_with_meta_permanent_access_token')) {
+    console.log(
+      '[whatsapp-startup-check] Note: WHATSAPP_ACCESS_TOKEN is not configured with a live Meta permanent token. Inbound webhooks and simulated CRM replies are functional.'
+    );
+    return;
+  }
+
+  try {
+    const url = `https://graph.facebook.com/${version}/${phoneId}?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${cleanToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      console.log(
+        '[whatsapp-startup-check] SUCCESS: Verified Meta WhatsApp Cloud API connection!',
+        JSON.stringify({
+          phoneNumberId: data.id || phoneId,
+          displayPhoneNumber: data.display_phone_number,
+          verifiedName: data.verified_name,
+          qualityRating: data.quality_rating,
+          statusCode: res.status
+        })
+      );
+    } else {
+      console.warn(
+        '[whatsapp-startup-check] WARNING: Meta WhatsApp Cloud API returned access error on startup',
+        JSON.stringify({
+          phoneNumberId: phoneId,
+          wabaId,
+          apiVersion: version,
+          statusCode: res.status,
+          errorCode: data?.error?.code,
+          errorSubcode: data?.error?.error_subcode,
+          errorType: data?.error?.type,
+          errorMessage: data?.error?.message,
+          diagnosticHint:
+            data?.error?.code === 131005
+              ? 'Error 131005 (Access denied): The access token does not have permission for Phone Number ID ' +
+                phoneId +
+                '. In Meta Business Manager, ensure the System User has "Full Control" asset permission on WABA (' +
+                wabaId +
+                ') and "whatsapp_business_messaging" scope.'
+              : undefined
+        })
+      );
+    }
+  } catch (err) {
+    console.warn('[whatsapp-startup-check] network error during validation:', err.message);
   }
 }
 
@@ -1042,10 +1186,28 @@ app.get('/api/webhooks/whatsapp', handleWebhookVerify);
 app.post('/api/webhooks/whatsapp', handleWebhookPost);
 
 app.get('/api/whatsapp/status', async (req, res) => {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-  const version = process.env.WHATSAPP_API_VERSION || 'v21.0';
+  const rawToken = process.env.WHATSAPP_ACCESS_TOKEN || '';
+  const token = rawToken.trim().replace(/['"]/g, '');
+  const cleanToken = token.startsWith('Bearer ') ? token.slice(7).trim() : token;
+
+  const phoneId = (
+    process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_PHONE_NUMBER_ID !== '109283746512345'
+      ? process.env.WHATSAPP_PHONE_NUMBER_ID
+      : '1384094818114996'
+  ).trim().replace(/['"]/g, '');
+
+  let version = String(process.env.WHATSAPP_API_VERSION || 'v21.0')
+    .trim()
+    .replace(/['"]/g, '')
+    .replace(/^\/+|\/+$/g, '');
+  if (!version.startsWith('v')) version = `v${version}`;
+
+  const wabaId = (
+    process.env.WHATSAPP_BUSINESS_ACCOUNT_ID && process.env.WHATSAPP_BUSINESS_ACCOUNT_ID !== '987654321098765'
+      ? process.env.WHATSAPP_BUSINESS_ACCOUNT_ID
+      : '1409996531275243'
+  ).trim().replace(/['"]/g, '');
+
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
 
   const publicOrigin =
@@ -1053,7 +1215,7 @@ app.get('/api/whatsapp/status', async (req, res) => {
       ? process.env.APP_URL
       : `${req.protocol}://${req.get('host')}`;
 
-  if (!token || !phoneId) {
+  if (!cleanToken || cleanToken.includes('replace_with_meta_permanent_access_token')) {
     return res.json({
       webhookReady: Boolean(verifyToken),
       webhookUrl: `${publicOrigin}/webhook`,
@@ -1061,18 +1223,29 @@ app.get('/api/whatsapp/status', async (req, res) => {
       cloudApiConnected: false,
       phoneNumberId: phoneId || '',
       businessAccountId: wabaId || '',
-      error: 'WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID is missing in environment.'
+      apiVersion: version,
+      error: 'WHATSAPP_ACCESS_TOKEN is not configured with a live Meta token.'
     });
   }
 
   try {
-    const url = `https://graph.facebook.com/${version}/${phoneId}?fields=id,display_phone_number,verified_name,quality_rating`;
+    const url = `https://graph.facebook.com/${version}/${phoneId}?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating`;
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${cleanToken}` }
     });
     const data = await response.json();
 
     if (!response.ok) {
+      const errCode = data?.error?.code;
+      let diagnosticHint = '';
+      if (errCode === 131005) {
+        diagnosticHint =
+          `Error 131005 (Access denied): The access token does not have permission for Phone Number ID (${phoneId}). In Meta Business Manager, ensure the System User has "Full Control" asset permission on WABA (${wabaId}) with "whatsapp_business_messaging" scope.`;
+      } else if (errCode === 190) {
+        diagnosticHint =
+          'Error 190 (Invalid/Expired Token): The access token is malformed, expired, or invalid. Please generate a new permanent System User access token in Meta Business Manager.';
+      }
+
       return res.json({
         webhookReady: Boolean(verifyToken),
         webhookUrl: `${publicOrigin}/webhook`,
@@ -1080,9 +1253,12 @@ app.get('/api/whatsapp/status', async (req, res) => {
         cloudApiConnected: false,
         phoneNumberId: phoneId,
         businessAccountId: wabaId || '',
+        apiVersion: version,
         error: data?.error?.message || `Meta Graph API HTTP ${response.status}`,
         errorCode: data?.error?.code,
-        errorSubcode: data?.error?.error_subcode
+        errorSubcode: data?.error?.error_subcode,
+        errorType: data?.error?.type,
+        diagnosticHint: diagnosticHint || undefined
       });
     }
 
@@ -1110,6 +1286,7 @@ app.get('/api/whatsapp/status', async (req, res) => {
       cloudApiConnected: true,
       phoneNumberId: data.id || phoneId,
       businessAccountId: wabaId || '',
+      apiVersion: version,
       displayPhoneNumber: data.display_phone_number || '',
       verifiedName: data.verified_name || '',
       qualityRating: data.quality_rating || ''
@@ -1122,8 +1299,31 @@ app.get('/api/whatsapp/status', async (req, res) => {
       cloudApiConnected: false,
       phoneNumberId: phoneId,
       businessAccountId: wabaId || '',
+      apiVersion: version,
       error: err.message
     });
+  }
+});
+
+// Diagnostic & direct test-send endpoint for testing outbound WhatsApp Cloud API
+app.post('/api/whatsapp/test-send', async (req, res) => {
+  try {
+    const { to, message } = req.body || {};
+    const recipient = to || '917306043445';
+    const text = message || 'Test outbound message from PulseFlow CRM';
+
+    const result = await sendWhatsAppCloudMessage(recipient, text);
+    res.json({
+      ok: result.sent,
+      statusCode: result.statusCode,
+      whatsappMessageId: result.whatsappMessageId,
+      error: result.error,
+      errorCode: result.errorCode,
+      errorType: result.errorType,
+      diagnosticHint: result.diagnosticHint
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -1994,6 +2194,12 @@ async function startServer() {
       await connectDB();
     } catch (err) {
       console.error('[server] Initial database connection attempt failed:', err.message);
+    }
+
+    try {
+      await validateWhatsAppCloudApiOnStartup();
+    } catch (err) {
+      console.warn('[server] WhatsApp Cloud API startup check error:', err.message);
     }
   });
 }

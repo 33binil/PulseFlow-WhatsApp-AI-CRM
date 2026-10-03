@@ -815,6 +815,8 @@ async function handleIncomingCustomerMessage({
         assignedAgentId: 'admin-1',
         status: 'OPEN',
         aiEnabled: true,
+        humanTakeoverActive: false,
+        humanAttentionRecommended: false,
         needsHumanAttention: false,
         unreadCount: 1,
         lastMessage: content,
@@ -861,11 +863,20 @@ async function handleIncomingCustomerMessage({
   const aiSettingDoc = await Setting.findOne({ type: 'aiSettings' });
   const aiSettings = aiSettingDoc?.data || INITIAL_AI_SETTINGS;
 
+  // Explicit manual human takeover state check:
+  // ONLY manual human takeover (humanTakeoverActive === true or aiEnabled === false set by human)
+  // or global AI settings can skip AI auto-reply.
+  // AI recommendations (humanAttentionRecommended / needsHumanAttention) MUST NEVER pause AI replies.
+  const humanTakeoverActive = Boolean(conv.humanTakeoverActive) || conv.aiEnabled === false;
+  const convAiEnabled = !humanTakeoverActive;
+
   console.log(
     '[pipeline] AI processing started',
     JSON.stringify({
       conversationId: conv.id,
-      convAiEnabled: Boolean(conv.aiEnabled),
+      convAiEnabled,
+      humanTakeoverActive,
+      humanAttentionRecommended: Boolean(conv.humanAttentionRecommended ?? conv.needsHumanAttention),
       globalAiEnabled: Boolean(aiSettings.aiEnabled),
       autoReplyEnabled: Boolean(aiSettings.autoReplyEnabled),
       configuredProvider: aiSettings.provider || process.env.AI_PROVIDER || 'GEMINI',
@@ -873,12 +884,13 @@ async function handleIncomingCustomerMessage({
     })
   );
 
-  if (!conv.aiEnabled || !aiSettings.aiEnabled || !aiSettings.autoReplyEnabled) {
+  if (!convAiEnabled || !aiSettings.aiEnabled || !aiSettings.autoReplyEnabled) {
     console.warn(
-      '[pipeline] AI auto-reply skipped (disabled in conversation or settings)',
+      '[pipeline] AI auto-reply skipped (manual human takeover active or global AI disabled)',
       JSON.stringify({
         conversationId: conv.id,
-        convAiEnabled: conv.aiEnabled,
+        convAiEnabled,
+        humanTakeoverActive,
         globalAiEnabled: aiSettings.aiEnabled,
         autoReplyEnabled: aiSettings.autoReplyEnabled
       })
@@ -928,15 +940,22 @@ async function handleIncomingCustomerMessage({
   });
 
   // Update Conversation in MongoDB
+  // CRITICAL PRODUCT RULE: AI recommendation MUST NEVER disable AI or activate human takeover.
+  // aiEnabled remains true and humanTakeoverActive remains false until human clicks "Take Over Chat".
+  const recommended = Boolean(aiStructured.needsHuman);
   conv.lastMessage = aiStructured.reply;
   conv.lastMessageTime = nowStr;
-  conv.aiEnabled = !aiStructured.needsHuman;
-  conv.needsHumanAttention = Boolean(aiStructured.needsHuman);
-  conv.status = aiStructured.needsHuman ? 'HUMAN_HANDOFF' : 'OPEN';
+  conv.aiEnabled = true;
+  conv.humanTakeoverActive = false;
+  conv.status = 'OPEN';
+  conv.humanAttentionRecommended = recommended;
+  conv.needsHumanAttention = recommended;
   conv.keyFinding = aiStructured.summary;
   if (languageHint) conv.language = languageHint;
-  if (aiStructured.needsHuman) {
-    conv.handoffReason = 'Customer requested human intervention or complex quote';
+  if (recommended) {
+    conv.handoffReason = 'Customer may need human attention';
+  } else {
+    conv.handoffReason = '';
   }
   await conv.save();
 
@@ -974,12 +993,12 @@ async function handleIncomingCustomerMessage({
     await lead.save();
   }
 
-  if (aiStructured.needsHuman) {
+  if (recommended) {
     await Notification.create({
       id: `notif-${Date.now()}`,
       type: 'HUMAN_ATTENTION',
-      title: 'Human Handoff Triggered by AI',
-      message: `${contact?.name || 'Customer'} requires human assistance. Auto-reply paused.`,
+      title: 'Customer May Need Human Attention',
+      message: `${contact?.name || 'Customer'} may benefit from human review. AI Assistant is still replying automatically.`,
       createdAt: 'Just now',
       isRead: false,
       linkTo: `/inbox?convId=${conv.id}`
@@ -1345,7 +1364,9 @@ const cleanList = (docs) => docs.map(cleanDoc);
 function computeDynamicFindings(leads, contacts, conversations) {
   const findings = [];
   const hotLeads = leads.filter((l) => l.leadType === 'HOT');
-  const handoffConvs = conversations.filter((c) => c.needsHumanAttention);
+  const handoffConvs = conversations.filter(
+    (c) => c.humanAttentionRecommended || c.needsHumanAttention
+  );
 
   if (hotLeads.length > 0) {
     const hotValue = hotLeads.reduce((sum, l) => sum + (l.estimatedValueInr || 0), 0);
@@ -1370,9 +1391,9 @@ function computeDynamicFindings(leads, contacts, conversations) {
     findings.push({
       id: 'sf-dynamic-handoff',
       category: 'CONVERSION_BOTTLENECK',
-      title: `${handoffConvs.length} WhatsApp Chat${handoffConvs.length > 1 ? 's' : ''} Waiting for Human Reply`,
-      metricBadge: 'NEEDS HUMAN TAKEOVER',
-      findingSummary: `AI paused auto-replies on ${handoffConvs.length} conversation(s) that requested a human agent or manager.`,
+      title: `${handoffConvs.length} WhatsApp Chat${handoffConvs.length > 1 ? 's' : ''} Recommended for Human Review`,
+      metricBadge: 'HUMAN ATTENTION RECOMMENDED',
+      findingSummary: `AI flagged ${handoffConvs.length} conversation(s) that may benefit from human review while AI continues replying automatically.`,
       recommendation: 'Open WhatsApp Inbox and reply directly to resolve customer questions.',
       actionLabel: 'Open WhatsApp Inbox',
       actionLink: '/inbox',
@@ -1582,6 +1603,8 @@ app.post('/api/contacts', async (req, res) => {
         assignedAgentId: req.body.assignedAgentId || 'admin-1',
         status: 'OPEN',
         aiEnabled: true,
+        humanTakeoverActive: false,
+        humanAttentionRecommended: false,
         needsHumanAttention: false,
         unreadCount: 0,
         lastMessage: 'Contact added to CRM — ready to chat on WhatsApp',
@@ -1672,6 +1695,8 @@ app.post('/api/leads', async (req, res) => {
         assignedAgentId: req.body.assignedAgentId || 'admin-1',
         status: 'OPEN',
         aiEnabled: true,
+        humanTakeoverActive: false,
+        humanAttentionRecommended: false,
         needsHumanAttention: false,
         unreadCount: 0,
         lastMessage: `Lead created for ${req.body.interestedService || 'Inquiry'}`,
@@ -1828,6 +1853,8 @@ app.post('/api/conversations', async (req, res) => {
       assignedAgentId: assignedAgentId || lead?.assignedAgentId || 'admin-1',
       status: 'OPEN',
       aiEnabled: true,
+      humanTakeoverActive: false,
+      humanAttentionRecommended: false,
       needsHumanAttention: false,
       unreadCount: 0,
       lastMessage: 'WhatsApp conversation opened in CRM',
@@ -1870,9 +1897,25 @@ app.delete('/api/conversations/:id', async (req, res) => {
 });
 app.patch('/api/conversations/:id', async (req, res) => {
   try {
+    const rawPatch = { ...(req.body.patch || req.body) };
+    delete rawPatch.systemMessage;
+
+    if (rawPatch.humanTakeoverActive === true || rawPatch.aiEnabled === false) {
+      rawPatch.humanTakeoverActive = true;
+      rawPatch.aiEnabled = false;
+      rawPatch.status = 'HUMAN_HANDOFF';
+    } else if (rawPatch.humanTakeoverActive === false || rawPatch.aiEnabled === true) {
+      rawPatch.humanTakeoverActive = false;
+      rawPatch.aiEnabled = true;
+      rawPatch.humanAttentionRecommended = false;
+      rawPatch.needsHumanAttention = false;
+      rawPatch.handoffReason = '';
+      rawPatch.status = 'OPEN';
+    }
+
     const conv = await Conversation.findOneAndUpdate(
       { id: req.params.id },
-      { $set: req.body.patch || req.body },
+      { $set: rawPatch },
       { new: true }
     );
 
@@ -1935,6 +1978,7 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
     conv.lastMessage = content.trim();
     conv.lastMessageTime = nowStr;
     conv.unreadCount = 0;
+    conv.humanAttentionRecommended = false;
     conv.needsHumanAttention = false;
     await conv.save();
 

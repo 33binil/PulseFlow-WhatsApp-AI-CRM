@@ -260,7 +260,7 @@ export const DashboardPage = () => {
             {humanAttentionConvs.length} {humanAttentionConvs.length === 1 ? 'chat' : 'chats'}
           </div>
           <p className="text-xs text-slate-600 mt-1.5">
-            AI paused itself here because the customer asked for a human or custom quote.
+            AI continues replying automatically unless you manually click "Take Over Chat" in the Inbox.
           </p>
         </Link>
 
@@ -349,12 +349,11 @@ export const DashboardPage = () => {
                       <div className="pt-1">
                         <button
                           onClick={() => {
-                            takeOverConversation(conv.id);
                             navigate(`/inbox?convId=${conv.id}`);
                           }}
                           className="w-full py-2 px-3 bg-slate-900 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                         >
-                          Reply in WhatsApp Inbox →
+                          Open in WhatsApp Inbox →
                         </button>
                       </div>
                     </div>

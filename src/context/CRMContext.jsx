@@ -108,6 +108,8 @@ export const CRMProvider = ({ children }) => {
                 p.unreadCount === n.unreadCount &&
                 p.lastMessage === n.lastMessage &&
                 p.aiEnabled === n.aiEnabled &&
+                p.humanTakeoverActive === n.humanTakeoverActive &&
+                p.humanAttentionRecommended === n.humanAttentionRecommended &&
                 p.needsHumanAttention === n.needsHumanAttention
               );
             })
@@ -476,6 +478,8 @@ export const CRMProvider = ({ children }) => {
       assignedAgentId: lead?.assignedAgentId || currentUser?.id || 'admin-1',
       status: 'OPEN',
       aiEnabled: true,
+      humanTakeoverActive: false,
+      humanAttentionRecommended: false,
       needsHumanAttention: false,
       unreadCount: 0,
       lastMessage: 'WhatsApp conversation opened in CRM',
@@ -539,6 +543,8 @@ export const CRMProvider = ({ children }) => {
   const takeOverConversation = (conversationId) => {
     const patch = {
       aiEnabled: false,
+      humanTakeoverActive: true,
+      humanAttentionRecommended: false,
       needsHumanAttention: false,
       status: 'HUMAN_HANDOFF'
     };
@@ -557,6 +563,11 @@ export const CRMProvider = ({ children }) => {
     })
       .then((r) => r.json())
       .then((data) => {
+        if (data?.conversation) {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === conversationId ? data.conversation : c))
+          );
+        }
         if (data?.systemMessage) {
           setMessagesByConv((prev) => ({
             ...prev,
@@ -567,7 +578,7 @@ export const CRMProvider = ({ children }) => {
       .catch((err) => console.error('Failed to take over conversation:', err));
 
     pushToast(
-      'Conversation Taken Over',
+      'Human is handling this chat',
       'AI replies paused. You are now chatting directly with the customer.',
       'warning'
     );
@@ -576,6 +587,8 @@ export const CRMProvider = ({ children }) => {
   const returnConversationToAI = (conversationId) => {
     const patch = {
       aiEnabled: true,
+      humanTakeoverActive: false,
+      humanAttentionRecommended: false,
       needsHumanAttention: false,
       handoffReason: '',
       status: 'OPEN'
@@ -595,6 +608,11 @@ export const CRMProvider = ({ children }) => {
     })
       .then((r) => r.json())
       .then((data) => {
+        if (data?.conversation) {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === conversationId ? data.conversation : c))
+          );
+        }
         if (data?.systemMessage) {
           setMessagesByConv((prev) => ({
             ...prev,
@@ -605,7 +623,7 @@ export const CRMProvider = ({ children }) => {
       .catch((err) => console.error('Failed to return conversation to AI:', err));
 
     pushToast(
-      'Returned to AI Assistant',
+      'AI Assistant is replying automatically',
       'AI auto-reply engine re-enabled for this thread.',
       'success'
     );
@@ -638,6 +656,7 @@ export const CRMProvider = ({ children }) => {
               lastMessage: content.trim(),
               lastMessageTime: nowStr,
               unreadCount: 0,
+              humanAttentionRecommended: false,
               needsHumanAttention: false
             }
           : c
@@ -694,20 +713,24 @@ export const CRMProvider = ({ children }) => {
         setLeads((prev) => prev.map((l) => (l.id === data.lead.id ? data.lead : l)));
       }
 
-      if (data.aiStructured?.needsHuman) {
+      if (data.aiMsg && data.aiStructured?.needsHuman) {
         pushToast(
-          'Human Handoff Triggered!',
-          'Customer escalated to Human Agent.',
-          'danger'
+          'AI Replied · Customer May Need Human Attention',
+          'AI replied automatically. Click "Take Over Chat" only if you wish to pause AI.',
+          'warning'
         );
-      } else if (data.aiStructured) {
+      } else if (data.aiMsg && data.aiStructured) {
         pushToast(
           'AI Auto-Replied & Saved to DB',
           `Intent: ${data.aiStructured.intent} · Score: ${data.aiStructured.leadScore}/100 (${data.aiStructured.leadType})`,
           'success'
         );
       } else {
-        pushToast('Incoming WhatsApp Message Saved', content.slice(0, 48));
+        pushToast(
+          'Incoming Message Saved (Human Mode)',
+          'AI did not reply because Human Takeover is active.',
+          'warning'
+        );
       }
     } catch (err) {
       console.error('Failed to process incoming message:', err);

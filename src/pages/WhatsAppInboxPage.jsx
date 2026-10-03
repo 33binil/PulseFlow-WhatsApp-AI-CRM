@@ -192,7 +192,7 @@ export const WhatsAppInboxPage = () => {
   const filteredList = useMemo(() => {
     return enrichedConversations.filter(({ conv, contact, lead }) => {
       if (inboxFilter === 'UNREAD' && conv.unreadCount === 0) return false;
-      if (inboxFilter === 'HUMAN' && !conv.needsHumanAttention) return false;
+      if (inboxFilter === 'HUMAN' && !(conv.humanAttentionRecommended || conv.needsHumanAttention)) return false;
       if (inboxFilter === 'HOT' && lead?.leadType !== 'HOT') return false;
 
       if (searchQuery.trim()) {
@@ -320,6 +320,10 @@ export const WhatsAppInboxPage = () => {
   }
 
   const { conv, contact, lead } = activeItem;
+  const isHumanTakeover = Boolean(conv.humanTakeoverActive) || conv.aiEnabled === false;
+  const isHumanAttentionRecommended = Boolean(
+    conv.humanAttentionRecommended || conv.needsHumanAttention
+  );
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col lg:flex-row bg-white overflow-hidden">
@@ -443,7 +447,7 @@ export const WhatsAppInboxPage = () => {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {itemConv.needsHumanAttention && (
+                      {(itemConv.humanAttentionRecommended || itemConv.needsHumanAttention) && (
                         <span className="text-rose-700 font-semibold flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />
                           <span>Needs You</span>
@@ -490,16 +494,22 @@ export const WhatsAppInboxPage = () => {
                 Speaks {conv.language}
               </span>
             </div>
-            <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
+            <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-2">
               <span
                 className={`font-semibold ${
-                  conv.aiEnabled ? 'text-emerald-700' : 'text-amber-700'
+                  !isHumanTakeover ? 'text-emerald-700' : 'text-amber-700'
                 }`}
               >
-                {conv.aiEnabled
+                {!isHumanTakeover
                   ? '● AI Assistant is replying automatically'
-                  : '● You are replying directly (AI is paused)'}
+                  : '● Human is handling this chat'}
               </span>
+              {!isHumanTakeover && isHumanAttentionRecommended && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                  <span>Customer may need human attention</span>
+                </span>
+              )}
             </div>
           </div>
 
@@ -513,7 +523,7 @@ export const WhatsAppInboxPage = () => {
               <span>Test Sample Customer Message</span>
             </button>
 
-            {conv.aiEnabled ? (
+            {!isHumanTakeover ? (
               <button
                 onClick={() => takeOverConversation(conv.id)}
                 className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
@@ -557,21 +567,24 @@ export const WhatsAppInboxPage = () => {
           </div>
         )}
 
-        {/* Clear Alert When Customer Needs Human Help */}
-        {conv.needsHumanAttention && (
-          <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-rose-800">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+        {/* Separate Recommendation Banner When AI Recommends Human Attention (AI still replies automatically) */}
+        {isHumanAttentionRecommended && !isHumanTakeover && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                <strong>Customer needs you:</strong>{' '}
-                {conv.handoffReason || 'Customer asked to speak with a person.'}
+                <strong>Customer may need human attention:</strong>{' '}
+                {conv.handoffReason || 'Customer inquiry may benefit from human review.'}{' '}
+                <span className="text-emerald-700 font-semibold">
+                  (AI Assistant is replying automatically)
+                </span>
               </span>
             </div>
             <button
               onClick={() => takeOverConversation(conv.id)}
-              className="px-3 py-1 bg-rose-700 text-white text-xs font-semibold rounded hover:bg-rose-800 transition-colors shrink-0 cursor-pointer"
+              className="px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded hover:bg-amber-700 transition-colors shrink-0 cursor-pointer"
             >
-              Take Over Now
+              Take Over Chat
             </button>
           </div>
         )}

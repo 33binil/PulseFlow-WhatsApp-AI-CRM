@@ -126,8 +126,10 @@ const ConversationSchema = new mongoose.Schema(
       default: 'OPEN'
     },
     aiEnabled: { type: Boolean, default: true },
+    humanTakeoverActive: { type: Boolean, default: false },
+    humanAttentionRecommended: { type: Boolean, default: false },
     needsHumanAttention: { type: Boolean, default: false },
-    handoffReason: { type: String },
+    handoffReason: { type: String, default: '' },
     unreadCount: { type: Number, default: 0 },
     lastMessage: { type: String, default: 'Conversation started' },
     lastMessageTime: { type: String, default: 'Just now' },
@@ -540,6 +542,31 @@ export async function purgeLegacyFakeDataAndEnsureDefaults() {
     const kbCount = await KnowledgeBase.countDocuments();
     if (kbCount === 0 && INITIAL_KNOWLEDGE_BASE.length > 0) {
       await KnowledgeBase.insertMany(INITIAL_KNOWLEDGE_BASE);
+    }
+
+    // Ensure any conversation that was not explicitly taken over by a human has aiEnabled = true
+    const allConvs = await Conversation.find({});
+    for (const c of allConvs) {
+      const manualTakeover = Boolean(c.humanTakeoverActive);
+      const recommended = Boolean(c.humanAttentionRecommended ?? c.needsHumanAttention);
+      if (
+        (!manualTakeover && c.aiEnabled === false) ||
+        c.humanTakeoverActive === undefined ||
+        c.humanAttentionRecommended === undefined
+      ) {
+        await Conversation.findOneAndUpdate(
+          { id: c.id },
+          {
+            $set: {
+              aiEnabled: !manualTakeover,
+              humanTakeoverActive: manualTakeover,
+              humanAttentionRecommended: recommended,
+              needsHumanAttention: recommended,
+              status: manualTakeover ? 'HUMAN_HANDOFF' : 'OPEN'
+            }
+          }
+        );
+      }
     }
   } catch (err) {
     console.warn('[db] ensure defaults notice:', err.message);
